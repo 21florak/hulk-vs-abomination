@@ -210,9 +210,9 @@ local function giveFlashlight(character)
 	end
 	local light = Instance.new("SpotLight")
 	light.Name = "Flashlight"
-	light.Range = 45
-	light.Angle = 50
-	light.Brightness = 3
+	light.Range = Config.Civilian.flashlightRange
+	light.Angle = Config.Civilian.flashlightAngle
+	light.Brightness = Config.Civilian.flashlightBrightness
 	light.Shadows = true
 	light.Color = Color3.fromRGB(255, 245, 220)
 	light.Face = Enum.NormalId.Front

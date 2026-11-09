@@ -71,6 +71,10 @@ Config.Civilian = {
 	flashlightBattery = 100,
 	flashlightDrain = 4,
 	flashlightRecharge = 6,
+	-- flashlight beam (raise these to make it brighter / reach further)
+	flashlightBrightness = 7,
+	flashlightRange = 75,
+	flashlightAngle = 60,
 }
 
 ---------------------------------------------------------------------------
