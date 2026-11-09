@@ -1,0 +1,3516 @@
+<roblox version="4"><Item class="Lighting" referent="RBX1"><Properties><string name="Name">Lighting</string><token name="Technology">4</token><bool name="GlobalShadows">true</bool></Properties></Item><Item class="ReplicatedStorage" referent="RBX4"><Properties><string name="Name">ReplicatedStorage</string></Properties><Item class="Folder" referent="RBX3"><Properties><string name="Name">Shared</string></Properties><Item class="ModuleScript" referent="RBX2"><Properties><string name="Name">Config</string><ProtectedString name="Source"><![CDATA[-- Every tunable number and name for Monster Lockdown lives here.
+local Config = {}
+
+-- Display names. These are Marvel characters: if Roblox moderation or a copyright claim
+-- becomes a problem, rename them here (e.g. "The Brute" / "The Horror") and nothing else changes.
+Config.Names = {
+	hulk = "Hulk",
+	abomination = "Abomination",
+	civilian = "Civilian",
+	game = "Hulk vs Abomination: Lockdown",
+}
+
+Config.Round = {
+	intermission = 20, -- seconds in the lobby between rounds
+	hide = 25, -- civilians hide while the Abomination is locked up
+	hunt = 240, -- the hunt
+	results = 10,
+}
+
+-- When there aren't enough players, AI bots play the giants
+Config.Bots = {
+	abomination = true, -- a bot Abomination if fewer than 2 players
+	hulk = true, -- a bot Hulk if fewer than 3 players
+}
+
+---------------------------------------------------------------------------
+-- Giants
+---------------------------------------------------------------------------
+Config.GiantScale = 3 -- characters are scaled up this much (about 15 studs tall)
+
+Config.Abomination = {
+	hp = 3000,
+	walkSpeed = 22,
+	rageSpeed = 28, -- once chaos is high
+	smashDamage = 160,
+	smashRange = 15,
+	smashCooldown = 1.0,
+	catchRange = 9, -- grabs any civilian (not hidden) this close
+	roarCooldown = 25,
+	roarRadius = 70, -- civilians in range are revealed to the Abomination for a moment
+	roarReveal = 2.5,
+	leapCooldown = 6,
+	searchTime = 1.2, -- hold time to search a hiding spot
+	searchRange = 18,
+	koSeconds = 18, -- knocked out this long when Hulk drops his HP to 0
+	koRecoverHp = 0.5,
+	noiseRadius = 90, -- hears civilians sprinting within this range
+}
+
+Config.Hulk = {
+	hp = 2600,
+	walkSpeed = 24,
+	smashDamage = 230,
+	smashRange = 15,
+	smashCooldown = 0.9,
+	clapCooldown = 16,
+	clapRadius = 32,
+	clapStun = 3,
+	clapDamage = 120,
+	leapCooldown = 5,
+}
+
+Config.Knockback = 140 -- how hard a giant gets launched by a hit (they crash through walls)
+
+Config.Civilian = {
+	walkSpeed = 13,
+	sprintSpeed = 21,
+	stamina = 100,
+	sprintDrain = 22, -- per second
+	staminaRegen = 14,
+	flashlightBattery = 100,
+	flashlightDrain = 4,
+	flashlightRecharge = 6,
+}
+
+---------------------------------------------------------------------------
+-- The facility
+---------------------------------------------------------------------------
+Config.Facility = {
+	cols = 6,
+	rows = 4,
+	room = 36, -- room size (studs)
+	hall = 16, -- hallway width (giants fit, barely)
+	height = 26, -- ceiling height
+	panel = 6, -- breakable wall panel width/height
+	doorWidth = 6,
+	doorHeight = 10, -- people fit through doors; giants have to smash
+}
+
+-- Chaos: rises with every smash and hit. Each threshold triggers something worse.
+Config.Chaos = {
+	perPanel = 0.35,
+	perGiantHit = 2.5,
+	thresholds = {
+		{ at = 20, event = "blackout", text = "The emergency lights are failing..." },
+		{ at = 45, event = "collapse", text = "The ceiling is coming down!" },
+		{ at = 70, event = "rage", text = "The Abomination is ENRAGED." },
+		{ at = 100, event = "failing", text = "STRUCTURE FAILING — nowhere is safe." },
+	},
+	collapseEvery = 9, -- seconds between random collapses once "failing"
+	spotStrength = 3, -- fight shockwaves nearby crack a hiding spot; this many and it breaks
+	shockwaveRadius = 34,
+}
+
+---------------------------------------------------------------------------
+-- Coins and costumes
+---------------------------------------------------------------------------
+Config.Rewards = {
+	abominationWin = 120,
+	abominationPerCatch = 15,
+	hulkWin = 100,
+	hulkKoBonus = 40,
+	survivor = 60,
+	caught = 10,
+	participation = 5,
+}
+
+-- Costumes recolor the character. Owned costumes are saved; price 0 = free default.
+Config.CostumeOrder = {
+	hulk = { "hulk_classic", "hulk_gray", "hulk_red", "hulk_gladiator" },
+	abomination = { "abom_classic", "abom_crimson", "abom_bone", "abom_toxic" },
+	civilian = { "civ_office", "civ_scientist", "civ_guard", "civ_janitor", "civ_hoodie" },
+}
+Config.Costumes = {
+	hulk_classic = { role = "hulk", name = "Classic Green", price = 0, skin = Color3.fromRGB(90, 160, 50), pants = Color3.fromRGB(90, 50, 130) },
+	hulk_gray = { role = "hulk", name = "Gray Brute", price = 200, skin = Color3.fromRGB(130, 135, 140), pants = Color3.fromRGB(30, 30, 35) },
+	hulk_red = { role = "hulk", name = "Red Rage", price = 400, skin = Color3.fromRGB(180, 35, 30), pants = Color3.fromRGB(40, 40, 45) },
+	hulk_gladiator = { role = "hulk", name = "Gladiator", price = 700, skin = Color3.fromRGB(80, 150, 45), pants = Color3.fromRGB(120, 40, 30), armor = Color3.fromRGB(200, 170, 80) },
+
+	abom_classic = { role = "abomination", name = "Classic Horror", price = 0, skin = Color3.fromRGB(95, 115, 85), spikes = Color3.fromRGB(45, 50, 40), eyes = Color3.fromRGB(255, 220, 60) },
+	abom_crimson = { role = "abomination", name = "Crimson Horror", price = 250, skin = Color3.fromRGB(110, 30, 30), spikes = Color3.fromRGB(25, 15, 15), eyes = Color3.fromRGB(255, 60, 40) },
+	abom_bone = { role = "abomination", name = "Bone White", price = 450, skin = Color3.fromRGB(215, 210, 195), spikes = Color3.fromRGB(80, 75, 70), eyes = Color3.fromRGB(120, 200, 255) },
+	abom_toxic = { role = "abomination", name = "Toxic", price = 800, skin = Color3.fromRGB(40, 70, 45), spikes = Color3.fromRGB(80, 255, 90), eyes = Color3.fromRGB(80, 255, 90), glow = true },
+
+	civ_office = { role = "civilian", name = "Office Worker", price = 0, shirt = Color3.fromRGB(235, 235, 235), pants = Color3.fromRGB(70, 70, 80) },
+	civ_scientist = { role = "civilian", name = "Scientist", price = 100, shirt = Color3.fromRGB(245, 245, 245), pants = Color3.fromRGB(40, 60, 100), coat = true },
+	civ_guard = { role = "civilian", name = "Security Guard", price = 150, shirt = Color3.fromRGB(30, 45, 80), pants = Color3.fromRGB(25, 30, 45) },
+	civ_janitor = { role = "civilian", name = "Janitor", price = 150, shirt = Color3.fromRGB(230, 120, 30), pants = Color3.fromRGB(60, 70, 60) },
+	civ_hoodie = { role = "civilian", name = "Black Hoodie", price = 250, shirt = Color3.fromRGB(25, 25, 28), pants = Color3.fromRGB(35, 35, 40) },
+}
+
+-- Optional sounds: paste Roblox audio asset ids (e.g. "rbxassetid://1234567") from the Creator
+-- Store. Empty strings are skipped, so the game works without them.
+Config.Sounds = {
+	ambience = "", -- looping dark drone
+	heartbeat = "",
+	roar = "",
+	smash = "",
+	alarm = "",
+	scream = "",
+}
+
+return Config
+]]></ProtectedString></Properties></Item></Item></Item><Item class="ServerScriptService" referent="RBX15"><Properties><string name="Name">ServerScriptService</string></Properties><Item class="Folder" referent="RBX14"><Properties><string name="Name">Server</string></Properties><Item class="Script" referent="RBX5"><Properties><string name="Name">Main</string><ProtectedString name="Source"><![CDATA[-- Round controller: lobby → role draw → hide → hunt → results, forever.
+local Lighting = game:GetService("Lighting")
+local Players = game:GetService("Players")
+local ProximityPromptService = game:GetService("ProximityPromptService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Services = script.Parent.Services
+local Net = require(Services.Net)
+local Data = require(Services.Data)
+local Facility = require(Services.Facility)
+local Destruction = require(Services.Destruction)
+local Hiding = require(Services.Hiding)
+local Giants = require(Services.Giants)
+local Bots = require(Services.Bots)
+
+Players.CharacterAutoLoads = false
+
+-- Pitch black everywhere; the lobby has its own lights
+Lighting.ClockTime = 0
+Lighting.Brightness = 0
+Lighting.Ambient = Color3.fromRGB(6, 6, 9)
+Lighting.OutdoorAmbient = Color3.fromRGB(0, 0, 0)
+Lighting.EnvironmentDiffuseScale = 0
+Lighting.EnvironmentSpecularScale = 0.15
+Lighting.FogColor = Color3.fromRGB(2, 2, 4)
+Lighting.FogStart = 8
+Lighting.FogEnd = 120
+Lighting.GlobalShadows = true
+
+Facility.buildLobby()
+
+---------------------------------------------------------------------------
+-- Round state
+---------------------------------------------------------------------------
+local round = {
+	phase = "lobby",
+	endsAt = 0,
+	roles = {}, -- player -> role
+	civilians = {}, -- players who started as civilians
+	caught = {}, -- player -> true
+	info = nil,
+}
+local battery = {} -- player -> flashlight battery
+local lastNoise = {} -- player -> time
+
+local function setRole(player, role)
+	round.roles[player] = role
+	player:SetAttribute("Role", role)
+end
+
+local function aliveCivilians()
+	local list = {}
+	for _, player in ipairs(round.civilians) do
+		if player.Parent and not round.caught[player] and round.roles[player] == "civilian" then
+			table.insert(list, player)
+		end
+	end
+	return list
+end
+
+local function abominationPlayer()
+	local actor = Giants.byRole.abomination
+	return actor and actor.player
+end
+
+local function sendState()
+	Net.all("State", {
+		phase = round.phase,
+		timeLeft = math.max(0, round.endsAt - os.clock()),
+		civiliansLeft = #aliveCivilians(),
+		civiliansTotal = #round.civilians,
+		hiding = Hiding.count(),
+		chaos = Destruction.chaos,
+	})
+end
+
+local function toLobby(player)
+	if player.Parent then
+		Hiding.forget(player)
+		player:SetAttribute("Hidden", nil)
+		player:LoadCharacter()
+	end
+end
+
+---------------------------------------------------------------------------
+-- Catching
+---------------------------------------------------------------------------
+local function catch(player, actor)
+	if round.phase ~= "hunt" or round.caught[player] or round.roles[player] ~= "civilian" then
+		return
+	end
+	round.caught[player] = true
+	if actor then
+		actor.catches = (actor.catches or 0) + 1
+	end
+	Hiding.leave(player)
+	Net.send(player, "Caught")
+	Net.all("Announce", "😱 " .. player.DisplayName .. " was caught!", "bad")
+	task.delay(2.5, function()
+		if player.Parent and round.caught[player] then
+			setRole(player, "spectator")
+			toLobby(player)
+		end
+	end)
+end
+Hiding.onCaught = catch
+
+-- A smash can grab anyone standing in front of the Abomination
+Giants.onCatchAttempt = function(actor, point, radius)
+	for _, player in ipairs(aliveCivilians()) do
+		local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+		if root and not Hiding.isHidden(player) and (root.Position - point).Magnitude <= radius + 4 then
+			catch(player, actor)
+		end
+	end
+end
+
+-- Roar: every civilian in range (even hidden ones) flashes on the Abomination's screen
+Giants.onRoar = function(actor)
+	local positions = {}
+	for _, player in ipairs(aliveCivilians()) do
+		local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+		if root and (root.Position - actor.root.Position).Magnitude <= Config.Abomination.roarRadius then
+			table.insert(positions, root.Position)
+			Bots.hear(root.Position, 10)
+			Net.send(player, "Roared")
+		end
+	end
+	if actor.player then
+		Net.send(actor.player, "Reveal", positions, Config.Abomination.roarReveal)
+	end
+end
+
+-- A hiding spot got smashed: the Abomination glimpses who fell out
+Hiding.onReveal = function(player)
+	local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+	if not root then
+		return
+	end
+	Bots.hear(root.Position, 6)
+	local abom = abominationPlayer()
+	if abom then
+		Net.send(abom, "Reveal", { root.Position }, 2)
+	end
+end
+
+Destruction.onSpotDestroyed = Hiding.destroySpot
+Destruction.onEvent = function(event)
+	if event == "rage" then
+		Giants.rage = true
+	elseif event == "blackout" then
+		-- exit signs die too
+		local root = workspace:FindFirstChild("Facility")
+		for _, d in ipairs(root and root:GetDescendants() or {}) do
+			if d:IsA("PointLight") and d.Parent and d.Parent.Name == "ExitSign" and math.random() < 0.7 then
+				d.Enabled = false
+				d.Parent.Material = Enum.Material.SmoothPlastic
+				d.Parent.Color = Color3.fromRGB(20, 40, 25)
+			end
+		end
+	end
+end
+
+---------------------------------------------------------------------------
+-- Players
+---------------------------------------------------------------------------
+local function costumeCivilian(character, costume)
+	for _, c in ipairs(character:GetChildren()) do
+		if c:IsA("Shirt") or c:IsA("Pants") or c:IsA("ShirtGraphic") then
+			c:Destroy()
+		end
+	end
+	for _, name in ipairs({ "UpperTorso", "LeftUpperArm", "RightUpperArm", "LeftLowerArm", "RightLowerArm", "Torso", "Left Arm", "Right Arm" }) do
+		local p = character:FindFirstChild(name)
+		if p then
+			p.Color = costume.shirt
+		end
+	end
+	for _, name in ipairs({ "LowerTorso", "LeftUpperLeg", "RightUpperLeg", "LeftLowerLeg", "RightLowerLeg", "Left Leg", "Right Leg" }) do
+		local p = character:FindFirstChild(name)
+		if p then
+			p.Color = costume.pants
+		end
+	end
+	local torso = character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso")
+	if costume.coat and torso then
+		local coat = Instance.new("Part")
+		coat.Name = "LabCoat"
+		coat.Size = torso.Size * Vector3.new(1.08, 1.6, 1.12)
+		coat.CFrame = torso.CFrame * CFrame.new(0, -torso.Size.Y * 0.25, 0)
+		coat.Color = Color3.new(1, 1, 1)
+		coat.Material = Enum.Material.Fabric
+		coat.CanCollide = false
+		coat.Massless = true
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = torso
+		weld.Part1 = coat
+		weld.Parent = coat
+		coat.Parent = character
+	end
+end
+
+local function giveFlashlight(character)
+	local head = character:FindFirstChild("Head")
+	if not head then
+		return
+	end
+	local light = Instance.new("SpotLight")
+	light.Name = "Flashlight"
+	light.Range = 45
+	light.Angle = 50
+	light.Brightness = 3
+	light.Shadows = true
+	light.Color = Color3.fromRGB(255, 245, 220)
+	light.Face = Enum.NormalId.Front
+	light.Enabled = false
+	light.Parent = head
+end
+
+local function onPlayerAdded(player)
+	local profile = Data.load(player)
+	local stats = Instance.new("Folder")
+	stats.Name = "leaderstats"
+	local coins = Instance.new("IntValue")
+	coins.Name = "Coins"
+	coins.Value = profile.coins
+	coins.Parent = stats
+	stats.Parent = player
+	player:SetAttribute("Role", "lobby")
+	player.CharacterAdded:Connect(function(character)
+		local humanoid = character:WaitForChild("Humanoid")
+		humanoid.Died:Connect(function()
+			task.wait(3)
+			if not player.Parent then
+				return
+			end
+			local role = round.roles[player]
+			if round.phase ~= "lobby" and (role == "hulk" or role == "civilian") then
+				-- out for the rest of the round
+				if role == "civilian" then
+					round.caught[player] = true
+				end
+				setRole(player, "spectator")
+			end
+			toLobby(player)
+		end)
+	end)
+	player:LoadCharacter()
+	Net.send(player, "Profile", profile)
+	if round.phase ~= "lobby" then
+		player:SetAttribute("Role", "spectator")
+	end
+end
+Players.PlayerAdded:Connect(onPlayerAdded)
+for _, p in ipairs(Players:GetPlayers()) do
+	task.spawn(onPlayerAdded, p)
+end
+Players.PlayerRemoving:Connect(function(player)
+	Hiding.forget(player)
+	round.roles[player] = nil
+	battery[player] = nil
+	lastNoise[player] = nil
+	Data.release(player)
+end)
+
+---------------------------------------------------------------------------
+-- Input from clients
+---------------------------------------------------------------------------
+Net.Input.OnServerEvent:Connect(function(player, kind)
+	local actor = Giants.ofPlayer(player)
+	if actor and round.phase == "hunt" then
+		if kind == "smash" then
+			Giants.smash(actor)
+		elseif kind == "roar" then
+			Giants.roar(actor)
+		elseif kind == "clap" then
+			Giants.clap(actor)
+		elseif kind == "leap" then
+			Giants.leap(actor)
+		end
+		return
+	end
+	if round.roles[player] == "civilian" then
+		if kind == "flashlight" then
+			local head = player.Character and player.Character:FindFirstChild("Head")
+			local light = head and head:FindFirstChild("Flashlight")
+			if light and not Hiding.isHidden(player) then
+				light.Enabled = not light.Enabled and (battery[player] or 0) > 2
+			end
+		elseif kind == "leave" then
+			Hiding.leave(player)
+		end
+	end
+end)
+
+ProximityPromptService.PromptTriggered:Connect(function(prompt, player)
+	local spot = prompt.Parent and prompt.Parent:FindFirstAncestorOfClass("Model")
+	if prompt.Name == "HidePrompt" and spot and round.phase ~= "lobby" then
+		Hiding.hide(player, spot)
+	elseif prompt.Name == "SearchPrompt" and spot and round.phase == "hunt" then
+		local actor = Giants.ofPlayer(player)
+		if actor and actor.role == "abomination" and Giants.active(actor) then
+			Hiding.search(actor, spot)
+		end
+	elseif prompt.Name == "ShopPrompt" then
+		Net.send(player, "OpenShop")
+	end
+end)
+
+Net.Shop.OnServerInvoke = function(player, action, id)
+	local ok, message = Data.shop(player, action, id)
+	Net.send(player, "Profile", Data.get(player))
+	return ok, message
+end
+
+---------------------------------------------------------------------------
+-- The round
+---------------------------------------------------------------------------
+local function shuffle(list)
+	for i = #list, 2, -1 do
+		local j = math.random(1, i)
+		list[i], list[j] = list[j], list[i]
+	end
+	return list
+end
+
+local function costumeFor(player, role)
+	if player then
+		return Data.costumeFor(player, role)
+	end
+	return Config.Costumes[Config.CostumeOrder[role][1]]
+end
+
+local function startRound()
+	local players = shuffle(Players:GetPlayers())
+	if #players == 0 then
+		return false
+	end
+	round.roles = {}
+	round.civilians = {}
+	round.caught = {}
+	Destruction.reset()
+	Hiding.reset()
+	Bots.reset()
+	Giants.clear()
+	local info = Facility.build(math.random(1, 1e6))
+	round.info = info
+
+	-- Roles: a random player is the Abomination (2+ players), another the Hulk (3+);
+	-- bots fill in, and everyone else is a civilian
+	local abomPlayer = if #players >= 2 then players[1] else nil
+	local hulkPlayer = if #players >= 3 then players[2] else nil
+	for _, player in ipairs(players) do
+		if player == abomPlayer then
+			setRole(player, "abomination")
+		elseif player == hulkPlayer then
+			setRole(player, "hulk")
+		else
+			setRole(player, "civilian")
+			table.insert(round.civilians, player)
+		end
+	end
+
+	-- Spawn everyone
+	for k, player in ipairs(players) do
+		task.spawn(function()
+			player:LoadCharacter()
+			local character = player.Character
+			if not character then
+				return
+			end
+			local role = round.roles[player]
+			if role == "civilian" then
+				costumeCivilian(character, costumeFor(player, "civilian"))
+				giveFlashlight(character)
+				battery[player] = Config.Civilian.flashlightBattery
+				character:FindFirstChildOfClass("Humanoid").WalkSpeed = Config.Civilian.walkSpeed
+				character:PivotTo(CFrame.new(info.civilianSpawns[(k - 1) % #info.civilianSpawns + 1]))
+			elseif role == "hulk" then
+				character:PivotTo(CFrame.new(info.hulkSpawn))
+				Giants.transformPlayer(player, "hulk", costumeFor(player, "hulk"))
+				character:PivotTo(CFrame.new(info.hulkSpawn + Vector3.new(0, 10, 0)))
+			elseif role == "abomination" then
+				character:PivotTo(CFrame.new(info.abominationSpawn))
+				local actor = Giants.transformPlayer(player, "abomination", costumeFor(player, "abomination"))
+				character:PivotTo(CFrame.new(info.abominationSpawn + Vector3.new(0, 10, 0)))
+				if actor then
+					actor.frozen = true
+				end
+			end
+			Net.send(player, "RoleReveal", role)
+		end)
+	end
+	if not abomPlayer and Config.Bots.abomination then
+		local bot = Giants.spawnBot("abomination", costumeFor(nil, "abomination"), info.abominationSpawn)
+		if bot then
+			bot.frozen = true
+		end
+	end
+	if not hulkPlayer and Config.Bots.hulk then
+		Giants.spawnBot("hulk", costumeFor(nil, "hulk"), info.hulkSpawn)
+	end
+	return true
+end
+
+local function releaseAbomination()
+	local glass = round.info and round.info.containmentGlass
+	if glass and glass.Parent then
+		glass.Anchored = false
+		glass.CanCollide = false
+		glass.AssemblyLinearVelocity = Vector3.new(60, 10, 0)
+		task.delay(1.5, function()
+			glass:Destroy()
+		end)
+		Net.all("Shatter", glass.Position)
+	end
+	local abom = Giants.byRole.abomination
+	if abom then
+		abom.frozen = false
+		Net.all("Roar", abom.root.Position)
+	end
+	Net.all("Announce", "🔓 THE CONTAINMENT CELL IS OPEN. It's hunting.", "bad")
+end
+
+local function payOut(winner)
+	local abom = Giants.byRole.abomination
+	local hulk = Giants.byRole.hulk
+	local R = Config.Rewards
+	for player, role in pairs(round.roles) do
+		if player.Parent then
+			local amount = R.participation
+			local profile = Data.get(player)
+			if role == "abomination" or (abom and abom.player == player) then
+				local catches = abom and abom.catches or 0
+				amount += catches * R.abominationPerCatch + (if winner == "abomination" then R.abominationWin else 0)
+				if profile then
+					profile.catches += catches
+				end
+			elseif role == "hulk" or (hulk and hulk.player == player) then
+				amount += (if winner == "hulk" then R.hulkWin else 0) + (hulk and hulk.koBonus or 0) * R.hulkKoBonus
+			elseif role == "civilian" and not round.caught[player] then
+				amount += if winner == "hulk" then R.survivor else 0
+			else
+				amount += R.caught
+			end
+			local won = (winner == "abomination" and role == "abomination") or (winner == "hulk" and (role == "hulk" or (role == "civilian" and not round.caught[player])))
+			if won and profile then
+				profile.wins += 1
+			end
+			Data.addCoins(player, amount)
+			Net.send(player, "Reward", amount, won)
+			Net.send(player, "Profile", profile)
+			task.spawn(Data.save, player)
+		end
+	end
+end
+
+local function endRound(winner, text)
+	round.phase = "results"
+	round.endsAt = os.clock() + Config.Round.results
+	Destruction.stop()
+	Net.all("Results", winner, text)
+	payOut(winner)
+	sendState()
+	task.wait(Config.Round.results)
+	for player in pairs(round.roles) do
+		setRole(player, "lobby")
+		toLobby(player)
+	end
+	for _, player in ipairs(Players:GetPlayers()) do
+		player:SetAttribute("Role", "lobby")
+	end
+	Giants.clear()
+	Hiding.reset()
+	Facility.clear()
+	round.roles = {}
+	round.civilians = {}
+	round.phase = "lobby"
+end
+
+-- Things that happen every tick during a round
+local function tick()
+	Giants.update()
+	Bots.step(aliveCivilians(), round.phase == "hunt")
+	if round.phase ~= "hunt" then
+		return
+	end
+	local abom = Giants.byRole.abomination
+	local now = os.clock()
+	for _, player in ipairs(aliveCivilians()) do
+		local character = player.Character
+		local root = character and character:FindFirstChild("HumanoidRootPart")
+		if root and not Hiding.isHidden(player) then
+			-- Grabbed if the Abomination gets close
+			if Giants.active(abom) then
+				local offset = root.Position - abom.root.Position
+				if (offset * Vector3.new(1, 0, 1)).Magnitude <= Config.Abomination.catchRange and math.abs(offset.Y) < 16 then
+					catch(player, abom)
+				end
+			end
+			-- Sprinting makes noise the Abomination can hear
+			local speed = (root.AssemblyLinearVelocity * Vector3.new(1, 0, 1)).Magnitude
+			if speed > Config.Civilian.walkSpeed + 3 and now - (lastNoise[player] or 0) > 0.8 then
+				lastNoise[player] = now
+				if abom and (abom.root.Position - root.Position).Magnitude <= Config.Abomination.noiseRadius then
+					Bots.hear(root.Position, 6)
+					if abom.player then
+						Net.send(abom.player, "Noise", root.Position)
+					end
+				end
+			end
+		end
+	end
+end
+
+-- Flashlight batteries drain while on, recharge while off (once a second)
+task.spawn(function()
+	while true do
+		task.wait(1)
+		for player, charge in pairs(battery) do
+			local head = player.Character and player.Character:FindFirstChild("Head")
+			local light = head and head:FindFirstChild("Flashlight")
+			if light then
+				if light.Enabled then
+					charge = math.max(0, charge - Config.Civilian.flashlightDrain)
+					if charge <= 0 then
+						light.Enabled = false
+					end
+				else
+					charge = math.min(Config.Civilian.flashlightBattery, charge + Config.Civilian.flashlightRecharge)
+				end
+				battery[player] = charge
+				Net.send(player, "Battery", charge)
+			end
+		end
+	end
+end)
+
+-- Main loop
+task.spawn(function()
+	while true do
+		-- Lobby / intermission
+		round.phase = "lobby"
+		local intermissionEnds = os.clock() + Config.Round.intermission
+		while os.clock() < intermissionEnds do
+			round.endsAt = intermissionEnds
+			Facility.setStatus("Next lockdown in " .. math.ceil(intermissionEnds - os.clock()) .. "s")
+			sendState()
+			task.wait(1)
+		end
+		if not startRound() then
+			continue
+		end
+
+		-- Hide
+		round.phase = "hide"
+		round.endsAt = os.clock() + Config.Round.hide
+		Facility.setStatus("LOCKDOWN IN PROGRESS")
+		Net.all("Announce", "🏃 HIDE! The " .. Config.Names.abomination .. " gets out in " .. Config.Round.hide .. " seconds.", "warn")
+		while os.clock() < round.endsAt do
+			tick()
+			sendState()
+			task.wait(0.25)
+		end
+
+		-- Hunt
+		round.phase = "hunt"
+		round.endsAt = os.clock() + Config.Round.hunt
+		releaseAbomination()
+		local lastState = 0
+		local winner, text
+		while true do
+			tick()
+			if os.clock() - lastState > 0.5 then
+				lastState = os.clock()
+				sendState()
+			end
+			local left = #aliveCivilians()
+			local abom = Giants.byRole.abomination
+			if #round.civilians > 0 and left == 0 then
+				winner, text = "abomination", "The " .. Config.Names.abomination .. " found everyone."
+				break
+			end
+			if not (abom and abom.model.Parent) then
+				winner, text = "hulk", "The " .. Config.Names.abomination .. " fled the building."
+				break
+			end
+			if os.clock() >= round.endsAt then
+				winner, text = "hulk", if left > 0 then left .. " civilian(s) survived the lockdown!" else "The lockdown is over."
+				break
+			end
+			task.wait(0.2)
+		end
+		endRound(winner, text)
+	end
+end)
+]]></ProtectedString></Properties></Item><Item class="Folder" referent="RBX13"><Properties><string name="Name">Services</string></Properties><Item class="ModuleScript" referent="RBX6"><Properties><string name="Name">Bots</string><ProtectedString name="Source"><![CDATA[-- AI for bot giants. They walk straight at their goal and, when a wall is in the way,
+-- smash through it — so bots tear the building apart as they hunt and fight.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Giants = require(script.Parent.Giants)
+local Hiding = require(script.Parent.Hiding)
+
+local Bots = {}
+
+-- Intel the Abomination bot has heard about: { position, expires }
+local clues = {}
+local searched = {} -- spot -> time it was last searched
+
+function Bots.reset()
+	table.clear(clues)
+	table.clear(searched)
+end
+
+function Bots.hear(position, seconds)
+	table.insert(clues, { position = position, expires = os.clock() + (seconds or 8) })
+end
+
+local function flatDistance(a, b)
+	return ((a - b) * Vector3.new(1, 0, 1)).Magnitude
+end
+
+local function face(actor, position)
+	local root = actor.root
+	local target = Vector3.new(position.X, root.Position.Y, position.Z)
+	if (target - root.Position).Magnitude > 0.5 then
+		root.CFrame = CFrame.lookAt(root.Position, target)
+	end
+end
+
+-- Move toward a point; if we haven't made progress, smash whatever is in front of us
+local function travel(actor, position)
+	actor.humanoid:MoveTo(position)
+	local now = os.clock()
+	actor.progress = actor.progress or { at = now, from = actor.root.Position }
+	if now - actor.progress.at > 1.1 then
+		local moved = flatDistance(actor.root.Position, actor.progress.from)
+		if moved < 3 and flatDistance(actor.root.Position, position) > 8 then
+			face(actor, position)
+			Giants.smash(actor)
+			if math.random() < 0.15 then
+				Giants.leap(actor)
+			end
+		end
+		actor.progress = { at = now, from = actor.root.Position }
+	end
+end
+
+local function intactSpots()
+	local root = Workspace:FindFirstChild("Facility")
+	local folder = root and root:FindFirstChild("HidingSpots")
+	local list = {}
+	for _, spot in ipairs(folder and folder:GetChildren() or {}) do
+		if spot.PrimaryPart and not spot:GetAttribute("Destroyed") then
+			table.insert(list, spot)
+		end
+	end
+	return list
+end
+
+local function abominationThink(actor, civilians)
+	local root = actor.root
+	local now = os.clock()
+	if actor.searching then
+		return
+	end
+	-- Fight back if the Hulk is on top of us
+	local hulk = Giants.byRole.hulk
+	-- (always when it just hit us, otherwise some of the time — it would rather hunt)
+	if Giants.alive(hulk) and flatDistance(hulk.root.Position, root.Position) < Config.Abomination.smashRange + 4
+		and (now - (actor.lastHitAt or -99) < 5 or math.random() < 0.3) then
+		face(actor, hulk.root.Position)
+		Giants.smash(actor)
+		return
+	end
+	-- Chase anyone out in the open
+	local best, bestDistance
+	for _, player in ipairs(civilians) do
+		local character = player.Character
+		local target = character and character:FindFirstChild("HumanoidRootPart")
+		if target and not Hiding.isHidden(player) then
+			local d = flatDistance(target.Position, root.Position)
+			if d < 150 and (not bestDistance or d < bestDistance) then
+				best, bestDistance = target, d
+			end
+		end
+	end
+	if best then
+		if bestDistance < Config.Abomination.smashRange then
+			face(actor, best.Position)
+			Giants.smash(actor)
+		end
+		travel(actor, best.Position)
+		return
+	end
+	if math.random() < 0.02 then
+		Giants.roar(actor)
+	end
+	-- Follow the freshest clue (noise or a roar reveal), then search spots near it
+	for i = #clues, 1, -1 do
+		if clues[i].expires < now then
+			table.remove(clues, i)
+		end
+	end
+	local goal = actor.goal
+	local clue = clues[#clues]
+	if clue then
+		goal = clue.position
+	end
+	-- Pick the nearest unsearched spot to the goal (or to us)
+	local spots = intactSpots()
+	local focus = goal or root.Position
+	local spot, spotScore
+	for _, s in ipairs(spots) do
+		if now - (searched[s] or -999) > 40 then
+			local score = flatDistance(s.PrimaryPart.Position, focus) + math.random() * 25
+			if not spotScore or score < spotScore then
+				spot, spotScore = s, score
+			end
+		end
+	end
+	if not spot then
+		actor.goal = nil
+		return
+	end
+	actor.goal = spot.PrimaryPart.Position
+	if flatDistance(spot.PrimaryPart.Position, root.Position) < Config.Abomination.searchRange - 4 then
+		-- Stop, rip it open
+		searched[spot] = now
+		actor.searching = true
+		actor.humanoid:MoveTo(root.Position)
+		face(actor, spot.PrimaryPart.Position)
+		task.delay(Config.Abomination.searchTime, function()
+			actor.searching = false
+			if Giants.active(actor) then
+				local found = Hiding.search(actor, spot)
+				if not found and math.random() < 0.35 then
+					-- frustrated: smash it to pieces
+					Giants.smash(actor)
+				end
+			end
+		end)
+		if clue and flatDistance(clue.position, spot.PrimaryPart.Position) < 30 then
+			table.remove(clues, #clues)
+		end
+		return
+	end
+	travel(actor, spot.PrimaryPart.Position)
+end
+
+local function hulkThink(actor, civilians)
+	local root = actor.root
+	local foe = Giants.byRole.abomination
+	if Giants.alive(foe) and os.clock() >= foe.koUntil then
+		local d = flatDistance(foe.root.Position, root.Position)
+		if d < Config.Hulk.clapRadius * 0.7 and math.random() < 0.15 then
+			Giants.clap(actor)
+		end
+		if d < Config.Hulk.smashRange + 2 then
+			face(actor, foe.root.Position)
+			Giants.smash(actor)
+		elseif d > 70 and math.random() < 0.05 then
+			face(actor, foe.root.Position)
+			Giants.leap(actor)
+		end
+		travel(actor, foe.root.Position)
+		return
+	end
+	-- Foe is down: guard whoever is closest to it
+	local guardPoint = if Giants.alive(foe) then foe.root.Position else root.Position
+	travel(actor, guardPoint + Vector3.new(math.random(-20, 20), 0, math.random(-20, 20)))
+end
+
+function Bots.step(civilians, hunting)
+	for _, actor in pairs(Giants.actors) do
+		if actor.bot and Giants.active(actor) and not actor.frozen and hunting then
+			if actor.role == "abomination" then
+				abominationThink(actor, civilians)
+			else
+				hulkThink(actor, civilians)
+			end
+		end
+	end
+end
+
+return Bots
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX7"><Properties><string name="Name">Data</string><ProtectedString name="Source"><![CDATA[-- Coins and costumes, saved between sessions.
+local DataStoreService = game:GetService("DataStoreService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+
+local Data = {}
+
+local store
+pcall(function()
+	store = DataStoreService:GetDataStore("MonsterLockdown_v1")
+end)
+
+local profiles = {}
+
+local function default()
+	return {
+		coins = 0,
+		owned = { hulk_classic = true, abom_classic = true, civ_office = true },
+		equipped = { hulk = "hulk_classic", abomination = "abom_classic", civilian = "civ_office" },
+		wins = 0,
+		catches = 0,
+	}
+end
+
+function Data.load(player)
+	local data
+	if store then
+		local ok, result = pcall(store.GetAsync, store, "p_" .. player.UserId)
+		if ok and type(result) == "table" then
+			data = result
+		end
+	end
+	local profile = default()
+	if data then
+		for k, v in pairs(data) do
+			profile[k] = v
+		end
+	end
+	profiles[player] = profile
+	return profile
+end
+
+function Data.get(player)
+	return profiles[player]
+end
+
+function Data.save(player)
+	local profile = profiles[player]
+	if store and profile then
+		pcall(store.SetAsync, store, "p_" .. player.UserId, profile)
+	end
+end
+
+function Data.release(player)
+	Data.save(player)
+	profiles[player] = nil
+end
+
+function Data.addCoins(player, amount)
+	local profile = profiles[player]
+	if profile and amount > 0 then
+		profile.coins += amount
+		local stats = player:FindFirstChild("leaderstats")
+		if stats then
+			stats.Coins.Value = profile.coins
+		end
+	end
+end
+
+function Data.costumeFor(player, role)
+	local profile = profiles[player]
+	local id = profile and profile.equipped[role]
+	return Config.Costumes[id] or Config.Costumes[Config.CostumeOrder[role][1]]
+end
+
+-- Shop actions: { action = "buy" | "equip", id }
+function Data.shop(player, action, id)
+	local profile = profiles[player]
+	local costume = Config.Costumes[id]
+	if not (profile and costume) then
+		return false, "Unknown costume."
+	end
+	if action == "buy" then
+		if profile.owned[id] then
+			return false, "You already own it."
+		end
+		if profile.coins < costume.price then
+			return false, "Not enough coins."
+		end
+		profile.coins -= costume.price
+		profile.owned[id] = true
+		profile.equipped[costume.role] = id
+		Data.addCoins(player, 0)
+		local stats = player:FindFirstChild("leaderstats")
+		if stats then
+			stats.Coins.Value = profile.coins
+		end
+		return true, "Unlocked " .. costume.name .. "!"
+	elseif action == "equip" then
+		if not profile.owned[id] then
+			return false, "Buy it first."
+		end
+		profile.equipped[costume.role] = id
+		return true, "Equipped " .. costume.name .. "."
+	end
+	return false, "Unknown action."
+end
+
+function Data.all()
+	return profiles
+end
+
+return Data
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX8"><Properties><string name="Name">Destruction</string><ProtectedString name="Source"><![CDATA[-- Destruction and chaos. Blasts break any Breakable part in range into flying debris,
+-- crack or shatter hiding spots (exposing whoever is inside), and raise the chaos meter.
+-- As chaos climbs, the building itself turns on the players: blackouts, ceiling collapses,
+-- an enraged Abomination, and finally random collapses everywhere.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Net = require(script.Parent.Net)
+
+local Destruction = {}
+Destruction.chaos = 0
+Destruction.onSpotDestroyed = nil -- set by Main (Hiding.destroySpot)
+Destruction.onEvent = nil -- set by Main: called with the event name ("rage", ...)
+
+local fired = {}
+local failingLoop = false
+
+local function facilityFolders()
+	local root = Workspace:FindFirstChild("Facility")
+	if not root then
+		return nil
+	end
+	return root, { root:FindFirstChild("Walls"), root:FindFirstChild("HidingSpots"), root:FindFirstChild("Decor"), root:FindFirstChild("Lights") }
+end
+
+function Destruction.reset()
+	Destruction.chaos = 0
+	table.clear(fired)
+	failingLoop = false
+end
+
+local function addChaos(amount)
+	if amount <= 0 then
+		return
+	end
+	Destruction.chaos = math.min(130, Destruction.chaos + amount)
+	Net.all("Chaos", Destruction.chaos)
+	for _, t in ipairs(Config.Chaos.thresholds) do
+		if Destruction.chaos >= t.at and not fired[t.event] then
+			fired[t.event] = true
+			Net.all("ChaosEvent", t.event, t.text)
+			task.spawn(Destruction.trigger, t.event) -- some events take a few seconds
+		end
+	end
+end
+Destruction.addChaos = addChaos
+
+local function spotOf(p)
+	local model = p:FindFirstAncestorOfClass("Model")
+	if model and model:GetAttribute("HidingSpot") then
+		return model
+	end
+	return nil
+end
+
+-- Break a hiding spot apart (and expose its occupant)
+function Destruction.shatterSpot(model, from)
+	if model:GetAttribute("Destroyed") then
+		return
+	end
+	model:SetAttribute("Destroyed", true)
+	if Destruction.onSpotDestroyed then
+		Destruction.onSpotDestroyed(model)
+	end
+	local root = Workspace:FindFirstChild("Facility")
+	local debris = root and root:FindFirstChild("Debris")
+	for _, p in ipairs(model:GetDescendants()) do
+		if p:IsA("ProximityPrompt") then
+			p:Destroy()
+		elseif p:IsA("BasePart") then
+			p.Anchored = false
+			local dir = (p.Position - (from or p.Position)) * Vector3.new(1, 0, 1)
+			dir = if dir.Magnitude > 0.1 then dir.Unit else Vector3.new(math.random() - 0.5, 0, math.random() - 0.5).Unit
+			p.AssemblyLinearVelocity = dir * math.random(25, 50) + Vector3.new(0, math.random(15, 35), 0)
+			if debris then
+				p.Parent = debris
+			end
+		end
+	end
+	model:Destroy()
+end
+
+local function freezeLater(parts)
+	task.delay(6, function()
+		for _, p in ipairs(parts) do
+			if p.Parent then
+				p.Anchored = true
+				p.CanCollide = p.Size.Magnitude > 3 -- small bits stop blocking movement
+			end
+		end
+	end)
+end
+
+-- point: world position, radius: studs. opts.fight = true when it came from giants fighting
+-- (cracks hiding spots further out). Returns how many pieces broke.
+function Destruction.blast(point, radius, opts)
+	opts = opts or {}
+	local root, folders = facilityFolders()
+	if not root then
+		return 0
+	end
+	local include = {}
+	for _, f in ipairs(folders) do
+		if f then
+			table.insert(include, f)
+		end
+	end
+	local params = OverlapParams.new()
+	params.FilterType = Enum.RaycastFilterType.Include
+	params.FilterDescendantsInstances = include
+	local hits = Workspace:GetPartBoundsInRadius(point, radius, params)
+	local broken = {}
+	local spots = {}
+	local debris = root:FindFirstChild("Debris")
+	for _, p in ipairs(hits) do
+		if p.Anchored and p:GetAttribute("Breakable") then
+			local spot = spotOf(p)
+			if spot then
+				spots[spot] = true
+			else
+				p.Anchored = false
+				p.CanCollide = true
+				local dir = p.Position - point
+				dir = if dir.Magnitude > 0.1 then dir.Unit else Vector3.yAxis
+				p.AssemblyLinearVelocity = dir * math.random(35, 80) + Vector3.new(0, math.random(10, 30), 0)
+				p.AssemblyAngularVelocity = Vector3.new(math.random(-6, 6), math.random(-6, 6), math.random(-6, 6))
+				for _, light in ipairs(p:GetChildren()) do
+					if light:IsA("Light") then
+						light.Enabled = false
+					end
+				end
+				if p.Material == Enum.Material.Neon then
+					p.Material = Enum.Material.SmoothPlastic
+					p.Color = Color3.fromRGB(40, 40, 40)
+				end
+				if debris then
+					p.Parent = debris
+				end
+				table.insert(broken, p)
+			end
+		end
+	end
+	for spot in pairs(spots) do
+		Destruction.shatterSpot(spot, point)
+	end
+	freezeLater(broken)
+
+	-- Fight shockwaves crack hiding spots nearby; enough cracks and they give way
+	if opts.fight then
+		local spotsFolder = root:FindFirstChild("HidingSpots")
+		for _, spot in ipairs(spotsFolder and spotsFolder:GetChildren() or {}) do
+			if spot.PrimaryPart and not spot:GetAttribute("Destroyed") then
+				local d = (spot.PrimaryPart.Position - point).Magnitude
+				if d > radius and d < Config.Chaos.shockwaveRadius then
+					local strength = (spot:GetAttribute("Strength") or 3) - 1
+					spot:SetAttribute("Strength", strength)
+					Net.all("SpotCracked", spot.PrimaryPart.Position, strength)
+					if strength <= 0 then
+						Destruction.shatterSpot(spot, point)
+					end
+				end
+			end
+		end
+	end
+
+	Net.all("Blast", point, radius, #broken)
+	addChaos(#broken * Config.Chaos.perPanel)
+	return #broken
+end
+
+-- A chunk of ceiling crashes down somewhere
+function Destruction.collapseAt(point)
+	local root = Workspace:FindFirstChild("Facility")
+	if not root then
+		return
+	end
+	local debris = root:FindFirstChild("Debris")
+	local h = Config.Facility.height
+	Net.all("Collapse", point)
+	for k = 1, 4 do
+		local slab = Instance.new("Part")
+		slab.Name = "CeilingChunk"
+		slab.Size = Vector3.new(math.random(4, 8), 1.5, math.random(4, 8))
+		slab.Color = Color3.fromRGB(60, 60, 62)
+		slab.Material = Enum.Material.Concrete
+		slab.CFrame = CFrame.new(point + Vector3.new(math.random(-5, 5), h - 2 - k * 0.5, math.random(-5, 5))) * CFrame.Angles(math.random(), math.random(), math.random())
+		slab.Parent = debris or root
+	end
+	task.delay(0.8, function()
+		Destruction.blast(point + Vector3.new(0, 3, 0), 9, { fight = false })
+	end)
+end
+
+local function randomInside()
+	local root = Workspace:FindFirstChild("Facility")
+	local spots = root and root:FindFirstChild("HidingSpots")
+	local list = spots and spots:GetChildren() or {}
+	-- Half the time the collapse lands near a hiding spot. Nowhere is safe.
+	if #list > 0 and math.random() < 0.5 then
+		local s = list[math.random(1, #list)]
+		if s.PrimaryPart then
+			return s.PrimaryPart.Position * Vector3.new(1, 0, 1)
+		end
+	end
+	local W, D = Config.Facility.cols * (Config.Facility.room + Config.Facility.hall), Config.Facility.rows * (Config.Facility.room + Config.Facility.hall)
+	return Vector3.new(math.random(-W / 2 + 10, W / 2 - 10), 0, math.random(-D / 2 + 10, D / 2 - 10))
+end
+
+function Destruction.trigger(event)
+	if event == "collapse" then
+		for _ = 1, 5 do
+			Destruction.collapseAt(randomInside())
+			task.wait(0.4)
+		end
+	elseif event == "failing" then
+		if failingLoop then
+			return
+		end
+		failingLoop = true
+		task.spawn(function()
+			while failingLoop and Workspace:FindFirstChild("Facility") do
+				Destruction.collapseAt(randomInside())
+				task.wait(Config.Chaos.collapseEvery)
+			end
+		end)
+	end
+	if Destruction.onEvent then
+		Destruction.onEvent(event)
+	end
+end
+
+function Destruction.stop()
+	failingLoop = false
+end
+
+return Destruction
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX9"><Properties><string name="Name">Facility</string><ProtectedString name="Source"><![CDATA[-- Builds the dark research facility (rebuilt fresh every round) and the lit lobby.
+-- Every wall inside the building is made of breakable panels; hiding spots are models with
+-- prompts. Layout: a grid of rooms, each an island surrounded by hallways.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+
+local Facility = {}
+
+local F = Config.Facility
+local PITCH = F.room + F.hall
+local WIDTH = F.cols * F.room + (F.cols + 1) * F.hall
+local DEPTH = F.rows * F.room + (F.rows + 1) * F.hall
+Facility.WIDTH, Facility.DEPTH = WIDTH, DEPTH
+
+local LOBBY = Vector3.new(0, 400, 0)
+Facility.LOBBY = LOBBY
+
+local WALL = Color3.fromRGB(150, 150, 145)
+local FLOOR = Color3.fromRGB(70, 72, 75)
+
+local function part(props, class)
+	local p = Instance.new(class or "Part")
+	p.Anchored = true
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	for k, v in pairs(props) do
+		if k == "Shape" then
+			p.Shape = v
+		end
+	end
+	for k, v in pairs(props) do
+		if k ~= "Shape" then
+			p[k] = v
+		end
+	end
+	return p
+end
+
+local function roomCenter(i, j)
+	return Vector3.new(-WIDTH / 2 + F.hall + F.room / 2 + (i - 1) * PITCH, 0, -DEPTH / 2 + F.hall + F.room / 2 + (j - 1) * PITCH)
+end
+
+local function hallPoint(rng)
+	-- a random point in the hallway grid
+	if rng:NextNumber() < 0.5 then
+		local k = rng:NextInteger(0, F.cols)
+		return Vector3.new(-WIDTH / 2 + F.hall / 2 + k * PITCH, 0, rng:NextNumber(-DEPTH / 2 + 8, DEPTH / 2 - 8))
+	end
+	local k = rng:NextInteger(0, F.rows)
+	return Vector3.new(rng:NextNumber(-WIDTH / 2 + 8, WIDTH / 2 - 8), 0, -DEPTH / 2 + F.hall / 2 + k * PITCH)
+end
+Facility.hallPoint = hallPoint
+
+---------------------------------------------------------------------------
+-- Breakable walls
+---------------------------------------------------------------------------
+-- A wall of panels from a to b (horizontal, along X or Z) with optional door openings
+-- (offsets from the wall's start). Everything gets the Breakable attribute.
+local function panelWall(parent, a, b, doors, color)
+	local alongX = math.abs(b.X - a.X) > math.abs(b.Z - a.Z)
+	local length = (b - a).Magnitude
+	local dir = (b - a).Unit
+	local columns = math.max(1, math.floor(length / F.panel + 0.5))
+	local width = length / columns
+	for c = 0, columns - 1 do
+		local mid = a + dir * (c + 0.5) * width
+		local isDoor = false
+		for _, d in ipairs(doors or {}) do
+			if math.abs((c + 0.5) * width - d) < width / 2 then
+				isDoor = true
+			end
+		end
+		local rows = {}
+		if isDoor then
+			table.insert(rows, { F.doorHeight, F.height })
+		else
+			table.insert(rows, { 0, F.panel })
+			table.insert(rows, { F.panel, F.panel * 2 })
+			table.insert(rows, { F.panel * 2, F.height })
+		end
+		for _, r in ipairs(rows) do
+			local h = r[2] - r[1]
+			local size = if alongX then Vector3.new(width, h, 1) else Vector3.new(1, h, width)
+			local p = part({ Name = "Panel", Size = size, Position = mid + Vector3.new(0, r[1] + h / 2, 0), Color = color or WALL, Material = Enum.Material.Concrete, Parent = parent })
+			p:SetAttribute("Breakable", true)
+		end
+		if isDoor then
+			-- door frame + exit sign above the door
+			local sign = part({ Name = "ExitSign", Size = if alongX then Vector3.new(2.6, 0.9, 1.4) else Vector3.new(1.4, 0.9, 2.6), Position = mid + Vector3.new(0, F.doorHeight + 1.2, 0), Color = Color3.fromRGB(40, 200, 90), Material = Enum.Material.Neon, CanCollide = false, Parent = parent })
+			local glow = Instance.new("PointLight")
+			glow.Color = Color3.fromRGB(60, 255, 120)
+			glow.Range = 9
+			glow.Brightness = 0.35
+			glow.Parent = sign
+			sign:SetAttribute("Breakable", true)
+		end
+	end
+end
+
+---------------------------------------------------------------------------
+-- Hiding spots
+---------------------------------------------------------------------------
+-- Each spot: a model with HidingSpot = true, HideCFrame (where the hidden player goes),
+-- PeekCFrame (their camera), Strength (shockwaves crack it), and two prompts:
+-- "Hide" (civilians) and "Search" (the Abomination). Clients hide prompts that aren't theirs.
+local function addPrompts(model, anchor)
+	local hide = Instance.new("ProximityPrompt")
+	hide.Name = "HidePrompt"
+	hide.ActionText = "Hide"
+	hide.ObjectText = model.Name
+	hide.HoldDuration = 0.4
+	hide.MaxActivationDistance = 7
+	hide.RequiresLineOfSight = false
+	hide.KeyboardKeyCode = Enum.KeyCode.E
+	hide.Parent = anchor
+	local search = Instance.new("ProximityPrompt")
+	search.Name = "SearchPrompt"
+	search.ActionText = "Search"
+	search.ObjectText = model.Name
+	search.HoldDuration = Config.Abomination.searchTime
+	search.MaxActivationDistance = Config.Abomination.searchRange
+	search.RequiresLineOfSight = false
+	search.KeyboardKeyCode = Enum.KeyCode.E
+	search.Parent = anchor
+end
+
+local function spot(parent, name, cframe, hideOffset, peekOffset, parts)
+	local model = Instance.new("Model")
+	model.Name = name
+	local anchor
+	for i, spec in ipairs(parts) do
+		local class = spec.class
+		spec.class = nil
+		local localCF = spec.CFrame or CFrame.new(spec.offset or Vector3.zero)
+		spec.offset = nil
+		spec.CFrame = cframe * localCF
+		spec.Parent = model
+		local p = part(spec, class)
+		p:SetAttribute("Breakable", true)
+		if i == 1 then
+			anchor = p
+		end
+	end
+	model.PrimaryPart = anchor
+	model:SetAttribute("HidingSpot", true)
+	model:SetAttribute("Strength", Config.Chaos.spotStrength)
+	model:SetAttribute("HideCFrame", cframe * hideOffset)
+	model:SetAttribute("PeekCFrame", cframe * peekOffset)
+	addPrompts(model, anchor)
+	model.Parent = parent
+	return model
+end
+
+local METAL = Color3.fromRGB(90, 100, 110)
+local WOOD = Color3.fromRGB(95, 70, 50)
+
+-- cframe: floor position, facing -Z (the side you open / peek from)
+local SPOT_BUILDERS = {
+	locker = function(parent, cf)
+		return spot(parent, "Locker", cf, CFrame.new(0, 3, 0), CFrame.new(0, 4.6, -0.6), {
+			{ Size = Vector3.new(2.6, 7.4, 2.4), offset = Vector3.new(0, 3.7, 0), Color = METAL, Material = Enum.Material.Metal },
+			{ Size = Vector3.new(2.2, 0.15, 0.1), offset = Vector3.new(0, 5.6, -1.22), Color = Color3.fromRGB(20, 20, 20) },
+			{ Size = Vector3.new(2.2, 0.15, 0.1), offset = Vector3.new(0, 5.2, -1.22), Color = Color3.fromRGB(20, 20, 20) },
+			{ Size = Vector3.new(0.2, 0.6, 0.2), offset = Vector3.new(0.9, 3.8, -1.25), Color = Color3.fromRGB(180, 180, 180) },
+		})
+	end,
+	cabinet = function(parent, cf)
+		return spot(parent, "Wardrobe", cf, CFrame.new(0, 3, 0), CFrame.new(0, 4.4, -0.9), {
+			{ Size = Vector3.new(4.4, 7.6, 2.6), offset = Vector3.new(0, 3.8, 0), Color = WOOD, Material = Enum.Material.Wood },
+			{ Size = Vector3.new(0.1, 7, 0.1), offset = Vector3.new(0, 3.8, -1.32), Color = Color3.fromRGB(30, 20, 15) },
+		})
+	end,
+	desk = function(parent, cf)
+		return spot(parent, "Desk", cf, CFrame.new(0, 1.2, 0.3) * CFrame.Angles(0, 0, 0), CFrame.new(0, 1.6, -1.4), {
+			{ Size = Vector3.new(6, 0.4, 3.2), offset = Vector3.new(0, 3, 0), Color = Color3.fromRGB(110, 85, 60), Material = Enum.Material.Wood },
+			{ Size = Vector3.new(6, 2.8, 0.2), offset = Vector3.new(0, 1.4, 1.5), Color = Color3.fromRGB(100, 75, 55), Material = Enum.Material.Wood },
+			{ Size = Vector3.new(0.3, 2.8, 3.2), offset = Vector3.new(-2.85, 1.4, 0), Color = Color3.fromRGB(100, 75, 55) },
+			{ Size = Vector3.new(0.3, 2.8, 3.2), offset = Vector3.new(2.85, 1.4, 0), Color = Color3.fromRGB(100, 75, 55) },
+			{ Size = Vector3.new(1.6, 1.1, 0.15), offset = Vector3.new(0.8, 3.75, 0.6), Color = Color3.fromRGB(25, 25, 30) }, -- monitor
+		})
+	end,
+	stall = function(parent, cf)
+		return spot(parent, "Bathroom Stall", cf, CFrame.new(0, 3, 0.8), CFrame.new(0, 4.6, -1.2), {
+			{ Size = Vector3.new(0.3, 7, 5), offset = Vector3.new(-2.2, 3.8, 0), Color = Color3.fromRGB(120, 130, 125) },
+			{ Size = Vector3.new(0.3, 7, 5), offset = Vector3.new(2.2, 3.8, 0), Color = Color3.fromRGB(120, 130, 125) },
+			{ Size = Vector3.new(4.2, 6.4, 0.2), offset = Vector3.new(0, 3.9, -2.5), Color = Color3.fromRGB(110, 120, 115) },
+			{ Size = Vector3.new(1.6, 1.6, 2.2), offset = Vector3.new(0, 0.8, 1.6), Color = Color3.fromRGB(230, 230, 225) }, -- toilet
+		})
+	end,
+	crate = function(parent, cf)
+		return spot(parent, "Crate", cf, CFrame.new(0, 1.5, 0), CFrame.new(0, 3.6, -1.6), {
+			{ Size = Vector3.new(5, 4.6, 5), offset = Vector3.new(0, 2.3, 0), Color = Color3.fromRGB(130, 100, 60), Material = Enum.Material.WoodPlanks },
+			{ CFrame = CFrame.new(0, 4.8, 0.4) * CFrame.Angles(math.rad(-12), 0, 0), Size = Vector3.new(5.2, 0.3, 5.2), Color = Color3.fromRGB(120, 90, 55), Material = Enum.Material.WoodPlanks },
+		})
+	end,
+	vent = function(parent, cf)
+		return spot(parent, "Air Vent", cf, CFrame.new(0, 1.2, 1.5), CFrame.new(0, 1.4, -0.2), {
+			{ Size = Vector3.new(4, 2.6, 5), offset = Vector3.new(0, 1.3, 2), Color = Color3.fromRGB(110, 115, 120), Material = Enum.Material.DiamondPlate },
+			{ Size = Vector3.new(3.4, 2, 0.1), offset = Vector3.new(0, 1.3, -0.52), Color = Color3.fromRGB(40, 40, 45), Material = Enum.Material.Metal },
+		})
+	end,
+	fridge = function(parent, cf)
+		return spot(parent, "Walk-in Fridge", cf, CFrame.new(0, 3, 0.3), CFrame.new(0, 4.5, -1.2), {
+			{ Size = Vector3.new(4.4, 8, 3.4), offset = Vector3.new(0, 4, 0), Color = Color3.fromRGB(200, 205, 210), Material = Enum.Material.Metal },
+			{ Size = Vector3.new(0.25, 2, 0.3), offset = Vector3.new(1.6, 4.5, -1.8), Color = Color3.fromRGB(60, 60, 60) },
+		})
+	end,
+	rack = function(parent, cf)
+		return spot(parent, "Server Rack", cf, CFrame.new(0, 3, 0.6), CFrame.new(0, 4.4, -1), {
+			{ Size = Vector3.new(3.4, 8, 3.4), offset = Vector3.new(0, 4, 0.2), Color = Color3.fromRGB(25, 25, 30), Material = Enum.Material.Metal },
+			{ Size = Vector3.new(3, 0.15, 0.05), offset = Vector3.new(0, 6, -1.52), Color = Color3.fromRGB(40, 255, 120), Material = Enum.Material.Neon },
+			{ Size = Vector3.new(3, 0.15, 0.05), offset = Vector3.new(0, 4.6, -1.52), Color = Color3.fromRGB(255, 160, 40), Material = Enum.Material.Neon },
+		})
+	end,
+}
+
+-- Room types: which hiding spots and props they get
+local ROOM_TYPES = {
+	{ name = "Office", spots = { "desk", "desk", "cabinet", "locker" }, color = Color3.fromRGB(150, 150, 140) },
+	{ name = "Lab", spots = { "cabinet", "crate", "locker" }, color = Color3.fromRGB(170, 175, 175) },
+	{ name = "Storage", spots = { "crate", "crate", "cabinet" }, color = Color3.fromRGB(120, 115, 105) },
+	{ name = "Restroom", spots = { "stall", "stall", "stall" }, color = Color3.fromRGB(160, 175, 170) },
+	{ name = "Break Room", spots = { "fridge", "cabinet", "desk" }, color = Color3.fromRGB(150, 140, 120) },
+	{ name = "Server Room", spots = { "rack", "rack", "vent" }, color = Color3.fromRGB(90, 95, 105) },
+	{ name = "Locker Room", spots = { "locker", "locker", "locker", "locker" }, color = Color3.fromRGB(130, 135, 140) },
+}
+
+-- Plain props (also breakable) to make rooms feel lived-in and abandoned
+local function prop(parent, name, cframe, size, color, material)
+	local p = part({ Name = name, Size = size, CFrame = cframe, Color = color, Material = material or Enum.Material.SmoothPlastic, Parent = parent })
+	p:SetAttribute("Breakable", true)
+	return p
+end
+
+local function furnish(parent, c, roomType, rng)
+	local half = F.room / 2
+	if roomType.name == "Office" or roomType.name == "Break Room" then
+		for _ = 1, 3 do
+			local pos = c + Vector3.new(rng:NextNumber(-half + 4, half - 4), 0, rng:NextNumber(-half + 4, half - 4))
+			-- toppled office chairs
+			prop(parent, "Chair", CFrame.new(pos + Vector3.new(0, 1, 0)) * CFrame.Angles(math.rad(rng:NextInteger(0, 90)), math.rad(rng:NextInteger(0, 360)), 0), Vector3.new(2, 2, 2), Color3.fromRGB(35, 35, 40))
+		end
+		prop(parent, "FilingCabinet", CFrame.new(c + Vector3.new(half - 1.5, 2.5, -half + 6)), Vector3.new(2, 5, 3), METAL, Enum.Material.Metal)
+	elseif roomType.name == "Lab" then
+		prop(parent, "LabBench", CFrame.new(c + Vector3.new(0, 1.6, 0)), Vector3.new(14, 3.2, 4), Color3.fromRGB(200, 200, 205), Enum.Material.Metal)
+		prop(parent, "Beakers", CFrame.new(c + Vector3.new(2, 3.6, 0)), Vector3.new(3, 0.9, 1), Color3.fromRGB(120, 255, 140), Enum.Material.Neon).Transparency = 0.4
+	elseif roomType.name == "Storage" then
+		for k = -1, 1 do
+			prop(parent, "Shelf", CFrame.new(c + Vector3.new(k * 9, 4, half - 2)), Vector3.new(7, 8, 2), METAL, Enum.Material.Metal)
+		end
+	elseif roomType.name == "Server Room" then
+		for k = -1, 1 do
+			prop(parent, "Rack", CFrame.new(c + Vector3.new(-half + 3, 4, k * 7)), Vector3.new(3, 8, 3), Color3.fromRGB(25, 25, 30), Enum.Material.Metal)
+		end
+	end
+	-- scattered papers and debris
+	for _ = 1, 4 do
+		local pos = c + Vector3.new(rng:NextNumber(-half + 2, half - 2), 0.05, rng:NextNumber(-half + 2, half - 2))
+		local paper = part({ Name = "Paper", Size = Vector3.new(1, 0.05, 1.3), CFrame = CFrame.new(pos) * CFrame.Angles(0, rng:NextNumber(0, 6), 0), Color = Color3.fromRGB(220, 220, 210), CanCollide = false, Parent = parent })
+		paper:SetAttribute("Breakable", true)
+	end
+end
+
+---------------------------------------------------------------------------
+-- Build
+---------------------------------------------------------------------------
+function Facility.clear()
+	local old = Workspace:FindFirstChild("Facility")
+	if old then
+		old:Destroy()
+	end
+end
+
+function Facility.build(seed)
+	Facility.clear()
+	local rng = Random.new(seed or os.time())
+	local root = Instance.new("Folder")
+	root.Name = "Facility"
+	local walls = Instance.new("Folder")
+	walls.Name = "Walls"
+	walls.Parent = root
+	local spots = Instance.new("Folder")
+	spots.Name = "HidingSpots"
+	spots.Parent = root
+	local decor = Instance.new("Folder")
+	decor.Name = "Decor"
+	decor.Parent = root
+	local lights = Instance.new("Folder")
+	lights.Name = "Lights"
+	lights.Parent = root
+	local debris = Instance.new("Folder")
+	debris.Name = "Debris"
+	debris.Parent = root
+
+	-- Shell: floor, ceiling, outer walls (unbreakable) with dark windows
+	part({ Name = "Floor", Size = Vector3.new(WIDTH + 4, 1, DEPTH + 4), Position = Vector3.new(0, -0.5, 0), Color = FLOOR, Material = Enum.Material.Concrete, Parent = root })
+	part({ Name = "Ceiling", Size = Vector3.new(WIDTH + 4, 2, DEPTH + 4), Position = Vector3.new(0, F.height + 1, 0), Color = Color3.fromRGB(40, 40, 42), Material = Enum.Material.Concrete, Parent = root })
+	for _, spec in ipairs({
+		{ Vector3.new(WIDTH + 4, F.height, 2), Vector3.new(0, F.height / 2, -DEPTH / 2 - 1) },
+		{ Vector3.new(WIDTH + 4, F.height, 2), Vector3.new(0, F.height / 2, DEPTH / 2 + 1) },
+		{ Vector3.new(2, F.height, DEPTH + 4), Vector3.new(-WIDTH / 2 - 1, F.height / 2, 0) },
+		{ Vector3.new(2, F.height, DEPTH + 4), Vector3.new(WIDTH / 2 + 1, F.height / 2, 0) },
+	}) do
+		part({ Name = "OuterWall", Size = spec[1], Position = spec[2], Color = Color3.fromRGB(70, 70, 72), Material = Enum.Material.Concrete, Parent = root })
+	end
+	-- Rain-streaked windows on the long outer walls (lightning flashes through them, client-side)
+	for x = -WIDTH / 2 + 20, WIDTH / 2 - 20, 40 do
+		for _, z in ipairs({ -DEPTH / 2 - 0.05, DEPTH / 2 + 0.05 }) do
+			local w = part({ Name = "Window", Size = Vector3.new(10, 6, 0.3), Position = Vector3.new(x, 16, z), Color = Color3.fromRGB(30, 40, 60), Material = Enum.Material.Glass, Transparency = 0.2, CanCollide = false, Parent = lights })
+			w:SetAttribute("Lightning", true)
+		end
+	end
+
+	-- Rooms
+	local info = { spots = {}, rooms = {}, civilianSpawns = {} }
+	local cellI, cellJ = 1, 1 -- containment cell
+	for i = 1, F.cols do
+		for j = 1, F.rows do
+			local c = roomCenter(i, j)
+			local half = F.room / 2
+			local isCell = i == cellI and j == cellJ
+			local roomType = if isCell then { name = "Containment", spots = {}, color = Color3.fromRGB(60, 65, 70) } else ROOM_TYPES[rng:NextInteger(1, #ROOM_TYPES)]
+			local roomFolder = Instance.new("Folder")
+			roomFolder.Name = roomType.name .. " " .. i .. "-" .. j
+			roomFolder.Parent = walls
+			-- doors on 1-2 random sides (offset along the 36-stud wall)
+			local doorSides = {}
+			-- door offsets sit on panel column centers (never the corner columns)
+			local function doorOffset()
+				return (rng:NextInteger(1, math.floor(F.room / F.panel) - 2) + 0.5) * F.panel
+			end
+			doorSides[rng:NextInteger(1, 4)] = { doorOffset() }
+			if rng:NextNumber() < 0.5 then
+				doorSides[rng:NextInteger(1, 4)] = { doorOffset() }
+			end
+			if isCell then
+				doorSides = {}
+			end
+			local corners = {
+				Vector3.new(c.X - half, 0, c.Z - half), Vector3.new(c.X + half, 0, c.Z - half),
+				Vector3.new(c.X + half, 0, c.Z + half), Vector3.new(c.X - half, 0, c.Z + half),
+			}
+			for side = 1, 4 do
+				local a, b = corners[side], corners[side % 4 + 1]
+				if isCell and side == 2 then
+					-- Containment: the east wall is a huge reinforced glass window that shatters at hunt start
+					local glass = part({ Name = "ContainmentGlass", Size = Vector3.new(1.5, F.height, F.room), Position = (a + b) / 2 + Vector3.new(0, F.height / 2, 0), Color = Color3.fromRGB(150, 200, 230), Material = Enum.Material.Glass, Transparency = 0.5, Parent = root })
+					info.containmentGlass = glass
+				else
+					panelWall(roomFolder, a, b, doorSides[side], roomType.color)
+				end
+			end
+			-- hiding spots placed along the inside of the walls, facing into the room
+			local used = {}
+			for _, kind in ipairs(roomType.spots) do
+				local tries = 0
+				while tries < 8 do
+					tries += 1
+					local side = rng:NextInteger(1, 4)
+					local along = rng:NextInteger(-2, 2) * 6
+					local key = side .. ":" .. along
+					local blocksDoor = false
+					for _, d in ipairs(doorSides[side] or {}) do
+						if math.abs((d - F.room / 2) - along) < 5 then
+							blocksDoor = true
+						end
+					end
+					if not used[key] and not blocksDoor then
+						used[key] = true
+						local inset = half - 2.4
+						local placements = {
+							CFrame.new(c + Vector3.new(along, 0, -inset)) * CFrame.Angles(0, math.pi, 0), -- north wall, facing +Z
+							CFrame.new(c + Vector3.new(inset, 0, along)) * CFrame.Angles(0, math.pi / 2, 0), -- east wall, facing -X
+							CFrame.new(c + Vector3.new(along, 0, inset)), -- south wall, facing -Z
+							CFrame.new(c + Vector3.new(-inset, 0, along)) * CFrame.Angles(0, -math.pi / 2, 0), -- west wall, facing +X
+						}
+						local model = SPOT_BUILDERS[kind](spots, placements[side])
+						table.insert(info.spots, model)
+						break
+					end
+				end
+			end
+			furnish(decor, c, roomType, rng)
+			-- a dead ceiling light and, sometimes, a flickering red emergency light
+			if rng:NextNumber() < 0.45 then
+				local e = part({ Name = "EmergencyLight", Size = Vector3.new(1.4, 0.6, 1.4), Position = c + Vector3.new(rng:NextNumber(-10, 10), F.height - 0.4, rng:NextNumber(-10, 10)), Color = Color3.fromRGB(255, 40, 30), Material = Enum.Material.Neon, CanCollide = false, Parent = lights })
+				local glow = Instance.new("PointLight")
+				glow.Color = Color3.fromRGB(255, 40, 30)
+				glow.Range = 22
+				glow.Brightness = 0.8
+				glow.Parent = e
+				e:SetAttribute("Breakable", true)
+			end
+			table.insert(info.rooms, { center = c, type = roomType.name })
+			if isCell then
+				info.abominationSpawn = c + Vector3.new(0, 4, 0)
+			end
+		end
+	end
+
+	-- Vents along the hallways' outer walls
+	for _ = 1, 6 do
+		local x = rng:NextNumber(-WIDTH / 2 + 20, WIDTH / 2 - 20)
+		local north = rng:NextNumber() < 0.5
+		local z = if north then -DEPTH / 2 + 2.6 else DEPTH / 2 - 2.6
+		local cf = CFrame.new(x, 0, z) * (if north then CFrame.Angles(0, math.pi, 0) else CFrame.identity)
+		table.insert(info.spots, SPOT_BUILDERS.vent(spots, cf))
+	end
+
+	-- Hallway emergency lights
+	for _ = 1, 10 do
+		local p = hallPoint(rng)
+		local e = part({ Name = "EmergencyLight", Size = Vector3.new(1.4, 0.6, 1.4), Position = p + Vector3.new(0, F.height - 0.4, 0), Color = Color3.fromRGB(255, 40, 30), Material = Enum.Material.Neon, CanCollide = false, Parent = lights })
+		local glow = Instance.new("PointLight")
+		glow.Color = Color3.fromRGB(255, 40, 30)
+		glow.Range = 26
+		glow.Brightness = 0.7
+		glow.Parent = e
+	end
+
+	-- Spawns: civilians around the central hallway, Hulk in the far corner
+	for _ = 1, 16 do
+		table.insert(info.civilianSpawns, hallPoint(rng) + Vector3.new(0, 3, 0))
+	end
+	info.hulkSpawn = Vector3.new(WIDTH / 2 - F.hall / 2, 6, DEPTH / 2 - F.hall / 2)
+	info.root = root
+	info.debris = debris
+	root.Parent = Workspace
+	Facility.info = info
+	return info
+end
+
+---------------------------------------------------------------------------
+-- Lobby: a lit, safe room high above the facility
+---------------------------------------------------------------------------
+function Facility.buildLobby()
+	if Workspace:FindFirstChild("Lobby") then
+		return
+	end
+	local lobby = Instance.new("Folder")
+	lobby.Name = "Lobby"
+	local o = LOBBY
+	part({ Name = "LobbyFloor", Size = Vector3.new(90, 1, 70), Position = o + Vector3.new(0, -0.5, 0), Color = Color3.fromRGB(40, 42, 50), Material = Enum.Material.Marble, Parent = lobby })
+	part({ Name = "LobbyCeiling", Size = Vector3.new(90, 1, 70), Position = o + Vector3.new(0, 24.5, 0), Color = Color3.fromRGB(25, 25, 30), Parent = lobby })
+	for _, spec in ipairs({
+		{ Vector3.new(90, 24, 1), Vector3.new(0, 12, -35) }, { Vector3.new(90, 24, 1), Vector3.new(0, 12, 35) },
+		{ Vector3.new(1, 24, 70), Vector3.new(-45, 12, 0) }, { Vector3.new(1, 24, 70), Vector3.new(45, 12, 0) },
+	}) do
+		part({ Name = "LobbyWall", Size = spec[1], Position = o + spec[2], Color = Color3.fromRGB(30, 32, 40), Parent = lobby })
+	end
+	for x = -30, 30, 20 do
+		for z = -20, 20, 20 do
+			local lamp = part({ Name = "LobbyLight", Size = Vector3.new(6, 0.3, 6), Position = o + Vector3.new(x, 24, z), Color = Color3.fromRGB(255, 240, 220), Material = Enum.Material.Neon, CanCollide = false, Parent = lobby })
+			local light = Instance.new("PointLight")
+			light.Range = 30
+			light.Brightness = 2
+			light.Parent = lamp
+		end
+	end
+	-- Green and red accent strips (team colors)
+	part({ Name = "Strip", Size = Vector3.new(90, 0.4, 0.4), Position = o + Vector3.new(0, 0.2, -34.6), Color = Color3.fromRGB(90, 200, 60), Material = Enum.Material.Neon, Parent = lobby })
+	part({ Name = "Strip", Size = Vector3.new(90, 0.4, 0.4), Position = o + Vector3.new(0, 0.2, 34.6), Color = Color3.fromRGB(200, 50, 40), Material = Enum.Material.Neon, Parent = lobby })
+
+	-- Costume shop booth
+	local booth = part({ Name = "CostumeShop", Size = Vector3.new(14, 8, 4), Position = o + Vector3.new(0, 4, -28), Color = Color3.fromRGB(60, 40, 90), Material = Enum.Material.SmoothPlastic, Parent = lobby })
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "ShopPrompt"
+	prompt.ActionText = "Costume Shop"
+	prompt.ObjectText = "Spend your coins"
+	prompt.MaxActivationDistance = 12
+	prompt.RequiresLineOfSight = false
+	prompt.Parent = booth
+	local gui = Instance.new("SurfaceGui")
+	gui.Face = Enum.NormalId.Back
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 30
+	gui.LightInfluence = 0
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundTransparency = 1
+	label.Font = Enum.Font.GothamBlack
+	label.TextScaled = true
+	label.TextColor3 = Color3.fromRGB(255, 220, 90)
+	label.Text = "🎭 COSTUME SHOP"
+	label.Parent = gui
+	gui.Parent = booth
+
+	-- Big status screen
+	local screen = part({ Name = "StatusScreen", Size = Vector3.new(40, 12, 1), Position = o + Vector3.new(0, 14, 34), Color = Color3.fromRGB(10, 10, 14), Parent = lobby })
+	local sgui = Instance.new("SurfaceGui")
+	sgui.Name = "Status"
+	sgui.Face = Enum.NormalId.Front
+	sgui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	sgui.PixelsPerStud = 20
+	sgui.LightInfluence = 0
+	local text = Instance.new("TextLabel")
+	text.Name = "Text"
+	text.Size = UDim2.fromScale(1, 1)
+	text.BackgroundTransparency = 1
+	text.Font = Enum.Font.GothamBlack
+	text.TextScaled = true
+	text.TextColor3 = Color3.fromRGB(230, 230, 235)
+	text.Text = Config.Names.game
+	text.Parent = sgui
+	sgui.Parent = screen
+
+	local spawn = Instance.new("SpawnLocation")
+	spawn.Name = "LobbySpawn"
+	spawn.Anchored = true
+	spawn.Size = Vector3.new(12, 1, 12)
+	spawn.Position = o + Vector3.new(0, 0.5, 10)
+	spawn.Color = Color3.fromRGB(90, 200, 60)
+	spawn.Material = Enum.Material.Neon
+	spawn.Duration = 0
+	spawn.Parent = lobby
+
+	lobby.Parent = Workspace
+	Facility.statusText = text
+end
+
+function Facility.setStatus(text)
+	if Facility.statusText then
+		Facility.statusText.Text = text
+	end
+end
+
+function Facility.lobbySpawn()
+	return CFrame.new(LOBBY + Vector3.new(math.random(-20, 20), 4, math.random(-10, 20)))
+end
+
+return Facility
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX10"><Properties><string name="Name">Giants</string><ProtectedString name="Source"><![CDATA[-- The two giants. A giant is an "actor": a scaled-up character (a player's, or an AI bot's)
+-- with its own HP, cooldowns and abilities. Hits launch the other giant, and a launched giant
+-- crashes through every wall in its path.
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Net = require(script.Parent.Net)
+local Destruction = require(script.Parent.Destruction)
+
+local Giants = {}
+Giants.actors = {} -- model -> actor
+Giants.byRole = {} -- "hulk" | "abomination" -> actor
+Giants.rage = false
+Giants.onCatchAttempt = nil -- set by Main: function(actor, point, radius)
+Giants.onRoar = nil -- set by Main: function(actor)
+
+local function cfgFor(role)
+	return if role == "hulk" then Config.Hulk else Config.Abomination
+end
+
+local function flat(v)
+	local f = v * Vector3.new(1, 0, 1)
+	return if f.Magnitude > 0.01 then f.Unit else Vector3.new(0, 0, -1)
+end
+
+---------------------------------------------------------------------------
+-- Looks
+---------------------------------------------------------------------------
+local function weldTo(model, anchor, props)
+	local p = Instance.new(props.class or "Part")
+	props.class = nil
+	p.CanCollide = false
+	p.CanQuery = false
+	p.Massless = true
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	for k, v in pairs(props) do
+		if k == "Shape" then
+			p.Shape = v
+		end
+	end
+	for k, v in pairs(props) do
+		if k ~= "Shape" then
+			p[k] = v
+		end
+	end
+	local w = Instance.new("WeldConstraint")
+	w.Part0 = anchor
+	w.Part1 = p
+	w.Parent = p
+	p.Parent = model
+	return p
+end
+
+local function describe(role, costume)
+	local desc = Instance.new("HumanoidDescription")
+	local skin = costume.skin
+	desc.HeadColor = skin
+	desc.TorsoColor = skin
+	desc.LeftArmColor = skin
+	desc.RightArmColor = skin
+	local legs = if role == "hulk" then costume.pants else skin
+	desc.LeftLegColor = legs
+	desc.RightLegColor = legs
+	desc.WidthScale = 1.05
+	desc.DepthScale = 1.05
+	return desc
+end
+
+local function decorate(model, role, costume)
+	local head = model:FindFirstChild("Head")
+	local torso = model:FindFirstChild("UpperTorso")
+	if not (head and torso) then
+		return
+	end
+	local face = head:FindFirstChildOfClass("Decal")
+	if face then
+		face:Destroy()
+	end
+	local hs, ts = head.Size, torso.Size
+	if role == "hulk" then
+		-- shaggy black hair, heavy brow, angry eyes, torn shorts (skin on the shins)
+		weldTo(model, head, { Name = "Hair", Size = Vector3.new(hs.X * 1.05, hs.Y * 0.35, hs.Z * 1.05), CFrame = head.CFrame * CFrame.new(0, hs.Y * 0.38, 0.05), Color = Color3.fromRGB(20, 20, 18), Material = Enum.Material.Fabric })
+		weldTo(model, head, { Name = "Brow", Size = Vector3.new(hs.X * 0.85, hs.Y * 0.12, 0.15), CFrame = head.CFrame * CFrame.new(0, hs.Y * 0.18, -hs.Z / 2 - 0.05), Color = costume.skin:Lerp(Color3.new(0, 0, 0), 0.4) })
+		for _, side in ipairs({ -1, 1 }) do
+			weldTo(model, head, { Name = "Eye", Size = Vector3.new(hs.X * 0.18, hs.Y * 0.08, 0.06), CFrame = head.CFrame * CFrame.new(side * hs.X * 0.2, hs.Y * 0.06, -hs.Z / 2 - 0.03) * CFrame.Angles(0, 0, side * -0.25), Color = Color3.fromRGB(255, 255, 230), Material = Enum.Material.Neon })
+		end
+		for _, name in ipairs({ "LeftLowerLeg", "RightLowerLeg", "LeftFoot", "RightFoot" }) do
+			local p = model:FindFirstChild(name)
+			if p then
+				p.Color = costume.skin
+			end
+		end
+		if costume.armor then
+			for _, side in ipairs({ -1, 1 }) do
+				weldTo(model, torso, { Name = "Pauldron", Size = Vector3.new(ts.X * 0.4, ts.Y * 0.2, ts.Z * 1.2), CFrame = torso.CFrame * CFrame.new(side * ts.X * 0.55, ts.Y * 0.45, 0), Color = costume.armor, Material = Enum.Material.Metal })
+			end
+			weldTo(model, torso, { Name = "Strap", Size = Vector3.new(ts.X * 0.18, ts.Y * 1.2, ts.Z * 1.05), CFrame = torso.CFrame * CFrame.Angles(0, 0, math.rad(35)), Color = Color3.fromRGB(90, 60, 30), Material = Enum.Material.Fabric })
+		end
+	else
+		-- spined back, bony ridges, finned skull, glowing eyes
+		local spikeMaterial = if costume.glow then Enum.Material.Neon else Enum.Material.Slate
+		for k = 0, 4 do
+			local spike = weldTo(model, torso, { class = "WedgePart", Name = "Spine", Size = Vector3.new(0.2, ts.Y * 0.25, ts.Z * 0.45), CFrame = torso.CFrame * CFrame.new(0, ts.Y * (0.4 - k * 0.2), ts.Z / 2 + ts.Z * 0.2) * CFrame.Angles(0, math.pi, 0), Color = costume.spikes, Material = spikeMaterial })
+			spike.Name = "Spine"
+		end
+		local lower = model:FindFirstChild("LowerTorso")
+		if lower then
+			weldTo(model, lower, { class = "WedgePart", Name = "Spine", Size = Vector3.new(0.2, lower.Size.Y * 0.8, lower.Size.Z * 0.45), CFrame = lower.CFrame * CFrame.new(0, 0, lower.Size.Z / 2 + lower.Size.Z * 0.2) * CFrame.Angles(0, math.pi, 0), Color = costume.spikes, Material = spikeMaterial })
+		end
+		for _, name in ipairs({ "LeftUpperArm", "RightUpperArm", "LeftLowerLeg", "RightLowerLeg" }) do
+			local p = model:FindFirstChild(name)
+			if p then
+				weldTo(model, p, { class = "WedgePart", Name = "Barb", Size = Vector3.new(0.2, p.Size.Y * 0.5, p.Size.Z * 0.5), CFrame = p.CFrame * CFrame.new(0, 0, p.Size.Z / 2 + p.Size.Z * 0.2) * CFrame.Angles(0, math.pi, 0), Color = costume.spikes, Material = spikeMaterial })
+			end
+		end
+		weldTo(model, head, { class = "WedgePart", Name = "SkullFin", Size = Vector3.new(0.25, hs.Y * 0.5, hs.Z * 1.1), CFrame = head.CFrame * CFrame.new(0, hs.Y * 0.55, 0.1), Color = costume.spikes, Material = spikeMaterial })
+		weldTo(model, head, { Name = "Brow", Size = Vector3.new(hs.X * 1.02, hs.Y * 0.14, hs.Z * 0.3), CFrame = head.CFrame * CFrame.new(0, hs.Y * 0.16, -hs.Z * 0.4), Color = costume.spikes, Material = spikeMaterial })
+		for _, side in ipairs({ -1, 1 }) do
+			local eye = weldTo(model, head, { Name = "Eye", Size = Vector3.new(hs.X * 0.2, hs.Y * 0.1, 0.06), CFrame = head.CFrame * CFrame.new(side * hs.X * 0.21, hs.Y * 0.04, -hs.Z / 2 - 0.03) * CFrame.Angles(0, 0, side * 0.35), Color = costume.eyes, Material = Enum.Material.Neon })
+			if side == 1 then
+				local glow = Instance.new("PointLight")
+				glow.Color = costume.eyes
+				glow.Range = 12
+				glow.Brightness = 1.2
+				glow.Parent = eye
+			end
+		end
+		weldTo(model, head, { Name = "Jaw", Size = Vector3.new(hs.X * 0.7, hs.Y * 0.08, 0.06), CFrame = head.CFrame * CFrame.new(0, -hs.Y * 0.22, -hs.Z / 2 - 0.03), Color = Color3.fromRGB(20, 15, 10) })
+	end
+end
+
+---------------------------------------------------------------------------
+-- Actors
+---------------------------------------------------------------------------
+local function register(model, role, player)
+	local humanoid = model:FindFirstChildOfClass("Humanoid")
+	local cfg = cfgFor(role)
+	local actor = {
+		model = model,
+		humanoid = humanoid,
+		root = model:FindFirstChild("HumanoidRootPart"),
+		role = role,
+		player = player,
+		hp = cfg.hp,
+		maxHp = cfg.hp,
+		cooldowns = {},
+		stunUntil = 0,
+		koUntil = 0,
+		flyUntil = 0,
+		nextFlyBlast = 0,
+		dead = false,
+	}
+	model:SetAttribute("Role", role)
+	model:SetAttribute("HP", actor.hp)
+	model:SetAttribute("MaxHP", actor.maxHp)
+	Giants.actors[model] = actor
+	Giants.byRole[role] = actor
+	humanoid.MaxHealth = 1e6
+	humanoid.Health = 1e6
+	humanoid.WalkSpeed = cfg.walkSpeed
+	humanoid.UseJumpPower = true
+	humanoid.JumpPower = 75
+	humanoid.BreakJointsOnDeath = false
+	Net.all("GiantHP", role, actor.hp, actor.maxHp, "ok")
+	return actor
+end
+
+-- Turn a player's character into a giant
+function Giants.transformPlayer(player, role, costume)
+	local character = player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if not humanoid then
+		return nil
+	end
+	for _, child in ipairs(character:GetChildren()) do
+		if child:IsA("Accessory") or child:IsA("Clothing") or child:IsA("ShirtGraphic") then
+			child:Destroy()
+		end
+	end
+	pcall(humanoid.ApplyDescription, humanoid, describe(role, costume))
+	decorate(character, role, costume)
+	character:ScaleTo(Config.GiantScale)
+	return register(character, role, player)
+end
+
+-- An AI-controlled giant (when there aren't enough players)
+function Giants.spawnBot(role, costume, position)
+	local ok, model = pcall(Players.CreateHumanoidModelFromDescription, Players, describe(role, costume), Enum.HumanoidRigType.R15)
+	if not ok or not model then
+		warn("[Lockdown] Couldn't create bot:", model)
+		return nil
+	end
+	model.Name = Config.Names[role] .. " (AI)"
+	decorate(model, role, costume)
+	model:ScaleTo(Config.GiantScale)
+	model:PivotTo(CFrame.new(position + Vector3.new(0, 8, 0)))
+	model.Parent = Workspace
+	model.HumanoidRootPart:SetNetworkOwner(nil)
+	local actor = register(model, role, nil)
+	actor.bot = true
+	return actor
+end
+
+function Giants.alive(actor)
+	return actor ~= nil and actor.model.Parent ~= nil and not actor.dead
+end
+
+function Giants.active(actor)
+	local now = os.clock()
+	return Giants.alive(actor) and now >= actor.koUntil and now >= actor.stunUntil
+end
+
+local function ready(actor, key, seconds)
+	local now = os.clock()
+	if (actor.cooldowns[key] or 0) > now then
+		return false
+	end
+	actor.cooldowns[key] = now + seconds
+	if actor.player then
+		Net.send(actor.player, "Cooldown", key, seconds)
+	end
+	return true
+end
+
+---------------------------------------------------------------------------
+-- Damage, knockouts and launches
+---------------------------------------------------------------------------
+function Giants.damage(target, amount, attacker)
+	if not Giants.alive(target) or os.clock() < target.koUntil then
+		return
+	end
+	target.hp = math.max(0, target.hp - amount)
+	target.model:SetAttribute("HP", target.hp)
+	target.lastHitBy = attacker
+	target.lastHitAt = os.clock()
+	local state = "ok"
+	if target.hp <= 0 then
+		if target.role == "hulk" then
+			target.dead = true
+			state = "dead"
+			target.humanoid.Health = 0
+			Net.all("Announce", "💀 " .. Config.Names.hulk .. " HAS FALLEN. No one is coming to save you.", "bad")
+		else
+			-- The Abomination goes down... for now
+			local cfg = Config.Abomination
+			target.koUntil = os.clock() + cfg.koSeconds
+			target.koCount = (target.koCount or 0) + 1
+			state = "ko"
+			target.humanoid.PlatformStand = true
+			Net.all("Announce", "💥 " .. Config.Names.abomination .. " is DOWN! It won't stay down for long...", "good")
+			if attacker then
+				attacker.koBonus = (attacker.koBonus or 0) + 1
+			end
+			task.delay(cfg.koSeconds, function()
+				if Giants.alive(target) then
+					target.hp = math.floor(target.maxHp * cfg.koRecoverHp)
+					target.model:SetAttribute("HP", target.hp)
+					target.humanoid.PlatformStand = false
+					Net.all("GiantHP", target.role, target.hp, target.maxHp, "ok")
+					Net.all("Announce", "⚠️ " .. Config.Names.abomination .. " is back on its feet.", "bad")
+					Net.all("Roar", target.root.Position)
+				end
+			end)
+		end
+	end
+	Net.all("GiantHP", target.role, target.hp, target.maxHp, state)
+end
+
+-- Launch a giant; while flying it smashes through whatever it hits
+function Giants.launch(target, direction, power)
+	local root = target.root
+	if not root then
+		return
+	end
+	local attachment = Instance.new("Attachment")
+	attachment.Parent = root
+	local push = Instance.new("LinearVelocity")
+	push.Attachment0 = attachment
+	push.MaxForce = math.huge
+	push.VectorVelocity = direction * power + Vector3.new(0, power * 0.25, 0)
+	push.Parent = root
+	target.flyUntil = os.clock() + 1.1
+	task.delay(0.35, function()
+		push:Destroy()
+		attachment:Destroy()
+	end)
+end
+
+---------------------------------------------------------------------------
+-- Abilities
+---------------------------------------------------------------------------
+function Giants.smash(actor)
+	if not Giants.active(actor) then
+		return
+	end
+	local cfg = cfgFor(actor.role)
+	if not ready(actor, "smash", cfg.smashCooldown) then
+		return
+	end
+	local look = flat(actor.root.CFrame.LookVector)
+	local point = actor.root.Position + look * cfg.smashRange * 0.55
+	Net.all("Smash", actor.role, point)
+
+	local opponent = Giants.byRole[if actor.role == "hulk" then "abomination" else "hulk"]
+	local hitGiant = false
+	if Giants.alive(opponent) and os.clock() >= opponent.koUntil then
+		local offset = opponent.root.Position - actor.root.Position
+		local distance = (offset * Vector3.new(1, 0, 1)).Magnitude
+		if distance <= cfg.smashRange + 5 and (distance < 9 or flat(offset):Dot(look) > 0.2) then
+			hitGiant = true
+			Giants.damage(opponent, cfg.smashDamage, actor)
+			Giants.launch(opponent, flat(offset), Config.Knockback)
+			Destruction.addChaos(Config.Chaos.perGiantHit)
+		end
+	end
+	Destruction.blast(point, 10, { fight = hitGiant })
+	if actor.role == "abomination" and Giants.onCatchAttempt then
+		Giants.onCatchAttempt(actor, point, cfg.smashRange * 0.6)
+	end
+end
+
+function Giants.roar(actor)
+	if actor.role ~= "abomination" or not Giants.active(actor) then
+		return
+	end
+	local cd = Config.Abomination.roarCooldown * (if Giants.rage then 0.5 else 1)
+	if not ready(actor, "roar", cd) then
+		return
+	end
+	Net.all("Roar", actor.root.Position)
+	if Giants.onRoar then
+		Giants.onRoar(actor)
+	end
+end
+
+function Giants.clap(actor)
+	if actor.role ~= "hulk" or not Giants.active(actor) then
+		return
+	end
+	local cfg = Config.Hulk
+	if not ready(actor, "clap", cfg.clapCooldown) then
+		return
+	end
+	Net.all("Clap", actor.root.Position)
+	local foe = Giants.byRole.abomination
+	local hit = false
+	if Giants.alive(foe) and (foe.root.Position - actor.root.Position).Magnitude <= cfg.clapRadius then
+		hit = true
+		foe.stunUntil = os.clock() + cfg.clapStun
+		Giants.damage(foe, cfg.clapDamage, actor)
+		Destruction.addChaos(Config.Chaos.perGiantHit)
+	end
+	Destruction.blast(actor.root.Position, 16, { fight = hit })
+end
+
+-- Leap: players jump themselves (client); this lands the ground pound. Bots get launched here.
+function Giants.leap(actor)
+	if not Giants.active(actor) then
+		return
+	end
+	local cfg = cfgFor(actor.role)
+	if not ready(actor, "leap", cfg.leapCooldown) then
+		return
+	end
+	if actor.bot then
+		Giants.launch(actor, flat(actor.root.CFrame.LookVector), 70)
+	end
+	task.delay(1.1, function()
+		if Giants.alive(actor) then
+			Net.all("Stomp", actor.root.Position)
+			Destruction.blast(actor.root.Position - Vector3.new(0, 4, 0), 10, { fight = false })
+		end
+	end)
+end
+
+---------------------------------------------------------------------------
+-- Per-frame: speeds, stuns, crashing through walls while flying
+---------------------------------------------------------------------------
+function Giants.update()
+	local now = os.clock()
+	for model, actor in pairs(Giants.actors) do
+		if not model.Parent then
+			Giants.actors[model] = nil
+		elseif not actor.dead then
+			local cfg = cfgFor(actor.role)
+			local speed = cfg.walkSpeed
+			if actor.role == "abomination" and Giants.rage then
+				speed = Config.Abomination.rageSpeed
+			end
+			if now < actor.stunUntil or now < actor.koUntil or actor.frozen then
+				speed = 0
+			end
+			actor.humanoid.WalkSpeed = speed
+			if now < actor.flyUntil and now >= actor.nextFlyBlast then
+				actor.nextFlyBlast = now + 0.1
+				Destruction.blast(actor.root.Position, 8, { fight = true })
+			end
+		end
+	end
+end
+
+function Giants.clear()
+	for model, actor in pairs(Giants.actors) do
+		if actor.bot and model.Parent then
+			model:Destroy()
+		end
+	end
+	table.clear(Giants.actors)
+	table.clear(Giants.byRole)
+	Giants.rage = false
+end
+
+function Giants.ofPlayer(player)
+	for _, actor in pairs(Giants.actors) do
+		if actor.player == player then
+			return actor
+		end
+	end
+	return nil
+end
+
+return Giants
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX11"><Properties><string name="Name">Hiding</string><ProtectedString name="Source"><![CDATA[-- Hiding spots: civilians hide inside (invisible, frozen, peeking out), the Abomination
+-- searches them, and destruction throws hidden civilians back out into the open.
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Net = require(script.Parent.Net)
+
+local Hiding = {}
+Hiding.onCaught = nil -- set by Main: function(player, catcherActor)
+Hiding.onReveal = nil -- set by Main: tell the Abomination where an exposed civilian is
+
+local occupantOf = {} -- spot -> player
+local spotOf = {} -- player -> spot
+local saved = {} -- player -> { [part] = transparency }
+
+local function rootOf(player)
+	local character = player.Character
+	return character and character:FindFirstChild("HumanoidRootPart"), character and character:FindFirstChildOfClass("Humanoid")
+end
+
+local function setInvisible(player, invisible)
+	local character = player.Character
+	if not character then
+		return
+	end
+	if invisible then
+		saved[player] = {}
+		for _, d in ipairs(character:GetDescendants()) do
+			if d:IsA("BasePart") or d:IsA("Decal") then
+				saved[player][d] = d.Transparency
+				d.Transparency = 1
+			elseif d:IsA("Light") then
+				d.Enabled = false
+			end
+		end
+	else
+		for d, t in pairs(saved[player] or {}) do
+			if d.Parent then
+				d.Transparency = t
+			end
+		end
+		saved[player] = nil
+	end
+end
+
+function Hiding.isHidden(player)
+	return spotOf[player] ~= nil
+end
+
+function Hiding.spotOf(player)
+	return spotOf[player]
+end
+
+function Hiding.hide(player, spot)
+	if player:GetAttribute("Role") ~= "civilian" or spotOf[player] then
+		return
+	end
+	if not (spot and spot.Parent and spot.PrimaryPart) or spot:GetAttribute("Destroyed") then
+		return
+	end
+	if occupantOf[spot] then
+		Net.send(player, "Toast", "Someone's already hiding in there!", "warn")
+		return
+	end
+	local root, humanoid = rootOf(player)
+	if not (root and humanoid) or (root.Position - spot.PrimaryPart.Position).Magnitude > 10 then
+		return
+	end
+	occupantOf[spot] = player
+	spotOf[player] = spot
+	player:SetAttribute("Hidden", true)
+	setInvisible(player, true)
+	root.Anchored = true
+	root.CFrame = spot:GetAttribute("HideCFrame")
+	Net.send(player, "Hidden", spot:GetAttribute("PeekCFrame"), spot.Name)
+end
+
+function Hiding.leave(player, launch)
+	local spot = spotOf[player]
+	if not spot then
+		return
+	end
+	spotOf[player] = nil
+	occupantOf[spot] = nil
+	player:SetAttribute("Hidden", nil)
+	setInvisible(player, false)
+	local root = rootOf(player)
+	if root then
+		local base = spot:GetAttribute("HideCFrame") or root.CFrame
+		root.CFrame = base * CFrame.new(0, 1.5, -4)
+		root.Anchored = false
+		if launch then
+			root.AssemblyLinearVelocity = launch
+		end
+	end
+	Net.send(player, "Unhidden")
+end
+
+-- Called by Destruction when a spot is smashed or collapses
+function Hiding.destroySpot(spot)
+	local player = occupantOf[spot]
+	if not player then
+		return
+	end
+	Hiding.leave(player, Vector3.new(math.random(-20, 20), 25, math.random(-20, 20)))
+	local _, humanoid = rootOf(player)
+	if humanoid then
+		local speed = humanoid.WalkSpeed
+		humanoid.WalkSpeed = 0
+		task.delay(1.5, function()
+			if humanoid.Parent then
+				humanoid.WalkSpeed = math.max(speed, Config.Civilian.walkSpeed)
+			end
+		end)
+	end
+	Net.send(player, "Exposed")
+	if Hiding.onReveal then
+		Hiding.onReveal(player)
+	end
+end
+
+-- The Abomination (player or bot) searches a spot
+function Hiding.search(actor, spot)
+	if not (spot and spot.Parent and spot.PrimaryPart) or spot:GetAttribute("Destroyed") then
+		return false
+	end
+	if (actor.root.Position - spot.PrimaryPart.Position).Magnitude > Config.Abomination.searchRange + 6 then
+		return false
+	end
+	local player = occupantOf[spot]
+	Net.all("Searched", spot.PrimaryPart.Position)
+	if player then
+		Hiding.leave(player)
+		if Hiding.onCaught then
+			Hiding.onCaught(player, actor)
+		end
+		return true
+	end
+	if actor.player then
+		Net.send(actor.player, "Toast", "Empty...", "info")
+	end
+	return false
+end
+
+function Hiding.forget(player)
+	local spot = spotOf[player]
+	if spot then
+		occupantOf[spot] = nil
+	end
+	spotOf[player] = nil
+	saved[player] = nil
+end
+
+function Hiding.reset()
+	for player in pairs(spotOf) do
+		player:SetAttribute("Hidden", nil)
+	end
+	table.clear(occupantOf)
+	table.clear(spotOf)
+	table.clear(saved)
+end
+
+-- How many civilians are hiding right now (for the HUD)
+function Hiding.count()
+	local n = 0
+	for player in pairs(spotOf) do
+		if player.Parent then
+			n += 1
+		end
+	end
+	return n
+end
+
+return Hiding
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX12"><Properties><string name="Name">Net</string><ProtectedString name="Source"><![CDATA[-- Remotes shared by every service.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Net = {}
+
+local folder = Instance.new("Folder")
+folder.Name = "Remotes"
+
+-- client -> server: abilities and actions (fire-and-forget)
+Net.Input = Instance.new("RemoteEvent")
+Net.Input.Name = "Input"
+Net.Input.Parent = folder
+
+-- client -> server: shop actions that need a reply
+Net.Shop = Instance.new("RemoteFunction")
+Net.Shop.Name = "Shop"
+Net.Shop.Parent = folder
+
+-- server -> client: everything else (kind, ...)
+Net.ToClient = Instance.new("RemoteEvent")
+Net.ToClient.Name = "ToClient"
+Net.ToClient.Parent = folder
+
+folder.Parent = ReplicatedStorage
+
+function Net.send(player, kind, ...)
+	if player and player.Parent then
+		Net.ToClient:FireClient(player, kind, ...)
+	end
+end
+
+function Net.all(kind, ...)
+	Net.ToClient:FireAllClients(kind, ...)
+end
+
+return Net
+]]></ProtectedString></Properties></Item></Item></Item></Item><Item class="StarterPlayer" referent="RBX21"><Properties><string name="Name">StarterPlayer</string></Properties><Item class="StarterPlayerScripts" referent="RBX20"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="Folder" referent="RBX19"><Properties><string name="Name">Client</string></Properties><Item class="LocalScript" referent="RBX16"><Properties><string name="Name">Controls</string><ProtectedString name="Source"><![CDATA[-- Input for every role:
+--   Giants:    Click / F = Smash   ·   Q = Roar (Abomination) / Thunderclap (Hulk)   ·   R = Leap
+--   Civilians: Shift = Sprint (makes noise)   ·   F = Flashlight   ·   Space / E = leave a hiding spot
+-- Phones get on-screen buttons. Prompts that don't fit your role are hidden.
+local ContextActionService = game:GetService("ContextActionService")
+local Players = game:GetService("Players")
+local ProximityPromptService = game:GetService("ProximityPromptService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+local player = Players.LocalPlayer
+local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local Remotes = ReplicatedStorage:WaitForChild("Remotes")
+local Input = Remotes:WaitForChild("Input")
+local ToClient = Remotes:WaitForChild("ToClient")
+
+local hidden = false
+local sprinting = false
+local stamina = Config.Civilian.stamina
+local localCooldowns = {}
+
+local function role()
+	return player:GetAttribute("Role")
+end
+
+local function parts()
+	local character = player.Character
+	return character, character and character:FindFirstChildOfClass("Humanoid"), character and character:FindFirstChild("HumanoidRootPart")
+end
+
+local function ready(key, seconds)
+	local now = os.clock()
+	if (localCooldowns[key] or 0) > now then
+		return false
+	end
+	localCooldowns[key] = now + seconds
+	return true
+end
+
+-- A big overhead swing for the local giant (visual only)
+local function swing()
+	local character = parts()
+	local arm = character and character:FindFirstChild("RightUpperArm")
+	local shoulder = arm and arm:FindFirstChild("RightShoulder")
+	if not shoulder then
+		return
+	end
+	task.spawn(function()
+		local start = os.clock()
+		while os.clock() - start < 0.35 do
+			local t = (os.clock() - start) / 0.35
+			shoulder.Transform = CFrame.Angles(math.rad(150) * math.sin(t * math.pi), 0, 0)
+			RunService.RenderStepped:Wait()
+		end
+		shoulder.Transform = CFrame.identity
+	end)
+end
+
+local function smash()
+	local r = role()
+	if r ~= "hulk" and r ~= "abomination" then
+		return
+	end
+	local cfg = if r == "hulk" then Config.Hulk else Config.Abomination
+	if not ready("smash", cfg.smashCooldown) then
+		return
+	end
+	swing()
+	local _, _, root = parts()
+	if root then
+		root.AssemblyLinearVelocity += root.CFrame.LookVector * 25
+	end
+	Input:FireServer("smash")
+end
+
+local function special()
+	local r = role()
+	if r == "hulk" then
+		Input:FireServer("clap")
+	elseif r == "abomination" then
+		Input:FireServer("roar")
+	end
+end
+
+local function leap()
+	local r = role()
+	if r ~= "hulk" and r ~= "abomination" then
+		return
+	end
+	local cfg = if r == "hulk" then Config.Hulk else Config.Abomination
+	if not ready("leap", cfg.leapCooldown) then
+		return
+	end
+	local _, humanoid, root = parts()
+	if root and humanoid and humanoid.WalkSpeed > 0 then
+		local look = root.CFrame.LookVector * Vector3.new(1, 0, 1)
+		root.AssemblyLinearVelocity = look.Unit * 75 + Vector3.new(0, 85, 0)
+		Input:FireServer("leap")
+	end
+end
+
+---------------------------------------------------------------------------
+-- Bindings (rebuilt whenever your role changes)
+---------------------------------------------------------------------------
+local bound = {}
+local function bind(name, fn, title, ...)
+	ContextActionService:BindAction(name, function(_, state)
+		if state == Enum.UserInputState.Begin then
+			fn()
+		end
+		return Enum.ContextActionResult.Sink
+	end, true, ...)
+	ContextActionService:SetTitle(name, title)
+	table.insert(bound, name)
+end
+
+local function unbindAll()
+	for _, name in ipairs(bound) do
+		ContextActionService:UnbindAction(name)
+	end
+	table.clear(bound)
+	ContextActionService:UnbindAction("Sprint")
+end
+
+local function updatePrompts()
+	local r = role()
+	local facility = workspace:FindFirstChild("Facility")
+	for _, d in ipairs(facility and facility:GetDescendants() or {}) do
+		if d:IsA("ProximityPrompt") then
+			if d.Name == "HidePrompt" then
+				d.Enabled = r == "civilian" and not hidden
+			elseif d.Name == "SearchPrompt" then
+				d.Enabled = r == "abomination"
+			end
+		end
+	end
+end
+
+local function applyRole()
+	unbindAll()
+	local r = role()
+	if r == "hulk" or r == "abomination" then
+		bind("GiantSmash", smash, "Smash", Enum.KeyCode.F, Enum.KeyCode.ButtonR2)
+		bind("GiantSpecial", special, if r == "hulk" then "Clap" else "Roar", Enum.KeyCode.Q, Enum.KeyCode.ButtonX)
+		bind("GiantLeap", leap, "Leap", Enum.KeyCode.R, Enum.KeyCode.ButtonY)
+	elseif r == "civilian" then
+		bind("Flashlight", function()
+			Input:FireServer("flashlight")
+		end, "Light", Enum.KeyCode.F, Enum.KeyCode.ButtonY)
+		ContextActionService:BindAction("Sprint", function(_, state)
+			sprinting = state == Enum.UserInputState.Begin
+			return Enum.ContextActionResult.Pass
+		end, true, Enum.KeyCode.LeftShift, Enum.KeyCode.ButtonL3)
+		ContextActionService:SetTitle("Sprint", "Run")
+	end
+	updatePrompts()
+end
+player:GetAttributeChangedSignal("Role"):Connect(applyRole)
+applyRole()
+
+-- New hiding spots appear every round
+workspace.ChildAdded:Connect(function(child)
+	if child.Name == "Facility" then
+		task.wait(1)
+		updatePrompts()
+	end
+end)
+
+-- Left click smashes for giants
+UserInputService.InputBegan:Connect(function(input, processed)
+	if processed then
+		return
+	end
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		smash()
+	elseif hidden and (input.KeyCode == Enum.KeyCode.Space or input.KeyCode == Enum.KeyCode.E) then
+		Input:FireServer("leave")
+	end
+end)
+
+-- Leaving a hiding spot on phones: tap the jump button
+UserInputService.JumpRequest:Connect(function()
+	if hidden then
+		Input:FireServer("leave")
+	end
+end)
+
+ToClient.OnClientEvent:Connect(function(kind)
+	if kind == "Hidden" then
+		hidden = true
+		updatePrompts()
+	elseif kind == "Unhidden" then
+		hidden = false
+		updatePrompts()
+	end
+end)
+
+---------------------------------------------------------------------------
+-- Sprint + stamina (civilians)
+---------------------------------------------------------------------------
+RunService.Heartbeat:Connect(function(dt)
+	if role() ~= "civilian" then
+		return
+	end
+	local _, humanoid = parts()
+	if not humanoid or humanoid.WalkSpeed == 0 then
+		return
+	end
+	local moving = humanoid.MoveDirection.Magnitude > 0.1
+	if sprinting and moving and stamina > 0 then
+		stamina = math.max(0, stamina - Config.Civilian.sprintDrain * dt)
+		humanoid.WalkSpeed = Config.Civilian.sprintSpeed
+	else
+		stamina = math.min(Config.Civilian.stamina, stamina + Config.Civilian.staminaRegen * dt)
+		humanoid.WalkSpeed = Config.Civilian.walkSpeed
+	end
+	player:SetAttribute("Stamina", math.floor(stamina))
+end)
+
+-- Show only the prompts that make sense for you
+ProximityPromptService.PromptShown:Connect(function(prompt)
+	if prompt.Name == "HidePrompt" and (role() ~= "civilian" or hidden) then
+		prompt.Enabled = false
+	elseif prompt.Name == "SearchPrompt" and role() ~= "abomination" then
+		prompt.Enabled = false
+	end
+end)
+]]></ProtectedString></Properties></Item><Item class="LocalScript" referent="RBX17"><Properties><string name="Name">Effects</string><ProtectedString name="Source"><![CDATA[-- Atmosphere and fear: role-based vision, heartbeat when the Abomination is near, camera
+-- shake, lightning through the windows, flickering emergency lights, the hiding-spot peek
+-- camera, and the Abomination's senses (revealed heartbeats, footstep ripples).
+local Lighting = game:GetService("Lighting")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local SoundService = game:GetService("SoundService")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+
+local player = Players.LocalPlayer
+local camera = Workspace.CurrentCamera
+local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local ToClient = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("ToClient")
+
+local function role()
+	return player:GetAttribute("Role")
+end
+
+---------------------------------------------------------------------------
+-- Sounds (only the ones with ids filled in Config.Sounds)
+---------------------------------------------------------------------------
+local sounds = {}
+for name, id in pairs(Config.Sounds) do
+	if id ~= "" then
+		local s = Instance.new("Sound")
+		s.Name = name
+		s.SoundId = id
+		s.Volume = 0.7
+		s.Looped = name == "ambience" or name == "heartbeat"
+		s.Parent = SoundService
+		sounds[name] = s
+	end
+end
+local function play(name, volume)
+	local s = sounds[name]
+	if s then
+		s.Volume = volume or 0.7
+		if not s.Looped then
+			s:Play()
+		elseif not s.IsPlaying then
+			s:Play()
+		end
+	end
+end
+if sounds.ambience then
+	sounds.ambience.Volume = 0.35
+	sounds.ambience:Play()
+end
+
+---------------------------------------------------------------------------
+-- Role vision
+---------------------------------------------------------------------------
+local grade = Instance.new("ColorCorrectionEffect")
+grade.Name = "RoleVision"
+grade.Parent = Lighting
+local baseAmbient = Lighting.Ambient
+
+local VISION = {
+	civilian = { tint = Color3.fromRGB(200, 210, 230), saturation = -0.45, contrast = 0.15, brightness = -0.02, ambient = Color3.fromRGB(4, 4, 7) },
+	abomination = { tint = Color3.fromRGB(255, 235, 150), saturation = -0.6, contrast = 0.25, brightness = 0.04, ambient = Color3.fromRGB(28, 26, 18) },
+	hulk = { tint = Color3.fromRGB(215, 255, 205), saturation = -0.3, contrast = 0.15, brightness = 0.02, ambient = Color3.fromRGB(20, 24, 18) },
+}
+local function applyVision()
+	local v = VISION[role()]
+	if v then
+		grade.TintColor = v.tint
+		grade.Saturation = v.saturation
+		grade.Contrast = v.contrast
+		grade.Brightness = v.brightness
+		baseAmbient = v.ambient
+	else
+		grade.TintColor = Color3.new(1, 1, 1)
+		grade.Saturation = 0
+		grade.Contrast = 0
+		grade.Brightness = 0
+		baseAmbient = Color3.fromRGB(6, 6, 9)
+	end
+	Lighting.Ambient = baseAmbient
+end
+player:GetAttributeChangedSignal("Role"):Connect(applyVision)
+applyVision()
+
+---------------------------------------------------------------------------
+-- Screen overlays: red vignette (heartbeat), flash
+---------------------------------------------------------------------------
+local gui = Instance.new("ScreenGui")
+gui.Name = "Fear"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
+gui.DisplayOrder = -1
+gui.Parent = player:WaitForChild("PlayerGui")
+
+local vignette = {}
+for _, spec in ipairs({
+	{ UDim2.fromScale(0, 0), UDim2.fromScale(1, 0.22), 90 },
+	{ UDim2.fromScale(0, 0.78), UDim2.fromScale(1, 0.22), 270 },
+	{ UDim2.fromScale(0, 0), UDim2.fromScale(0.18, 1), 0 },
+	{ UDim2.fromScale(0.82, 0), UDim2.fromScale(0.18, 1), 180 },
+}) do
+	local f = Instance.new("Frame")
+	f.Position = spec[1]
+	f.Size = spec[2]
+	f.BorderSizePixel = 0
+	f.BackgroundColor3 = Color3.fromRGB(160, 0, 0)
+	f.BackgroundTransparency = 1
+	local g = Instance.new("UIGradient")
+	g.Rotation = spec[3]
+	g.Transparency = NumberSequence.new(0, 1)
+	g.Parent = f
+	f.Parent = gui
+	table.insert(vignette, f)
+end
+
+local flash = Instance.new("Frame")
+flash.Size = UDim2.fromScale(1, 1)
+flash.BorderSizePixel = 0
+flash.BackgroundColor3 = Color3.new(1, 1, 1)
+flash.BackgroundTransparency = 1
+flash.Parent = gui
+local function screenFlash(color, strength, seconds)
+	flash.BackgroundColor3 = color
+	flash.BackgroundTransparency = 1 - strength
+	TweenService:Create(flash, TweenInfo.new(seconds or 0.4), { BackgroundTransparency = 1 }):Play()
+end
+
+local whisper = Instance.new("TextLabel")
+whisper.AnchorPoint = Vector2.new(0.5, 0)
+whisper.Position = UDim2.fromScale(0.5, 0.72)
+whisper.Size = UDim2.new(0.6, 0, 0, 30)
+whisper.BackgroundTransparency = 1
+whisper.Font = Enum.Font.Antique
+whisper.TextSize = 26
+whisper.TextColor3 = Color3.fromRGB(220, 60, 50)
+whisper.TextTransparency = 1
+whisper.Text = ""
+whisper.Parent = gui
+
+---------------------------------------------------------------------------
+-- Camera shake
+---------------------------------------------------------------------------
+local shake = 0
+local function addShake(amount)
+	shake = math.min(3, shake + amount)
+end
+local function shakeFrom(position, power, range)
+	local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+	local from = if root then root.Position else camera.CFrame.Position
+	local d = (from - position).Magnitude
+	if d < range then
+		addShake(power * (1 - d / range))
+	end
+end
+
+---------------------------------------------------------------------------
+-- Hiding camera: peek out through the slats
+---------------------------------------------------------------------------
+local hiddenAt = nil
+local yaw, pitch = 0, 0
+local slats = Instance.new("Frame")
+slats.Size = UDim2.fromScale(1, 1)
+slats.BackgroundTransparency = 1
+slats.Visible = false
+slats.Parent = gui
+for k = 0, 6 do
+	local bar = Instance.new("Frame")
+	bar.BorderSizePixel = 0
+	bar.BackgroundColor3 = Color3.fromRGB(5, 5, 6)
+	bar.Position = UDim2.fromScale(0, k / 7)
+	bar.Size = UDim2.new(1, 0, 1 / 7, -18)
+	bar.Parent = slats
+end
+local hint = Instance.new("TextLabel")
+hint.AnchorPoint = Vector2.new(0.5, 1)
+hint.Position = UDim2.new(0.5, 0, 1, -20)
+hint.Size = UDim2.new(0.6, 0, 0, 24)
+hint.BackgroundTransparency = 1
+hint.Font = Enum.Font.GothamBold
+hint.TextSize = 16
+hint.TextColor3 = Color3.fromRGB(200, 200, 200)
+hint.Text = "Hiding... stay still.   Space / E to get out"
+hint.Parent = slats
+
+UserInputService.InputChanged:Connect(function(input)
+	if hiddenAt and input.UserInputType == Enum.UserInputType.MouseMovement then
+		yaw = math.clamp(yaw - input.Delta.X * 0.004, -0.6, 0.6)
+		pitch = math.clamp(pitch - input.Delta.Y * 0.004, -0.35, 0.35)
+	end
+end)
+
+---------------------------------------------------------------------------
+-- The Abomination's senses: revealed heartbeats and footstep ripples
+---------------------------------------------------------------------------
+local function heartMarker(position, seconds)
+	local anchor = Instance.new("Part")
+	anchor.Anchored = true
+	anchor.CanCollide = false
+	anchor.CanQuery = false
+	anchor.Transparency = 1
+	anchor.Size = Vector3.one
+	anchor.Position = position
+	anchor.Parent = Workspace
+	local bill = Instance.new("BillboardGui")
+	bill.Size = UDim2.fromOffset(60, 60)
+	bill.AlwaysOnTop = true
+	bill.LightInfluence = 0
+	local heart = Instance.new("TextLabel")
+	heart.Size = UDim2.fromScale(1, 1)
+	heart.BackgroundTransparency = 1
+	heart.TextScaled = true
+	heart.Text = "❤️"
+	heart.Parent = bill
+	bill.Parent = anchor
+	task.spawn(function()
+		local start = os.clock()
+		while os.clock() - start < seconds do
+			local beat = math.abs(math.sin((os.clock() - start) * 7))
+			bill.Size = UDim2.fromOffset(40 + beat * 30, 40 + beat * 30)
+			RunService.RenderStepped:Wait()
+		end
+		anchor:Destroy()
+	end)
+end
+
+local function ripple(position)
+	local ring = Instance.new("Part")
+	ring.Anchored = true
+	ring.CanCollide = false
+	ring.CanQuery = false
+	ring.Shape = Enum.PartType.Cylinder
+	ring.Material = Enum.Material.Neon
+	ring.Color = Color3.fromRGB(255, 80, 60)
+	ring.Transparency = 0.3
+	ring.Size = Vector3.new(0.2, 2, 2)
+	ring.CFrame = CFrame.new(position - Vector3.new(0, 2.5, 0)) * CFrame.Angles(0, 0, math.rad(90))
+	ring.Parent = Workspace
+	TweenService:Create(ring, TweenInfo.new(1.2), { Size = Vector3.new(0.2, 26, 26), Transparency = 1 }):Play()
+	task.delay(1.3, function()
+		ring:Destroy()
+	end)
+end
+
+---------------------------------------------------------------------------
+-- Lights: flickering emergency lights, lightning through the windows
+---------------------------------------------------------------------------
+local blackout = false
+local failing = false
+local function emergencyLights()
+	local list = {}
+	local facility = Workspace:FindFirstChild("Facility")
+	for _, d in ipairs(facility and facility:GetDescendants() or {}) do
+		if d:IsA("BasePart") and d.Name == "EmergencyLight" then
+			local light = d:FindFirstChildOfClass("PointLight")
+			if light then
+				table.insert(list, light)
+			end
+		end
+	end
+	return list
+end
+
+task.spawn(function()
+	while true do
+		task.wait(0.12)
+		local lights = emergencyLights()
+		for _, light in ipairs(lights) do
+			if light.Parent and light.Parent.Material == Enum.Material.Neon then
+				local on
+				if failing then
+					on = math.floor(os.clock() * 3) % 2 == 0 -- alarm strobe
+				elseif blackout then
+					on = math.random() < 0.35
+				else
+					on = math.random() < 0.93
+				end
+				light.Enabled = on
+			end
+		end
+	end
+end)
+
+task.spawn(function()
+	while true do
+		task.wait(math.random(14, 30))
+		local r = role()
+		if r == "civilian" or r == "hulk" or r == "abomination" then
+			-- two quick flashes: for a split second you can see the whole hallway
+			for _ = 1, 2 do
+				Lighting.Ambient = Color3.fromRGB(110, 115, 140)
+				task.wait(0.07)
+				Lighting.Ambient = baseAmbient
+				task.wait(0.12)
+			end
+			task.delay(1.2, function()
+				addShake(0.4) -- thunder
+			end)
+		end
+	end
+end)
+
+---------------------------------------------------------------------------
+-- Every frame: heartbeat, shake, hiding camera
+---------------------------------------------------------------------------
+local function findAbomination()
+	for _, other in ipairs(Players:GetPlayers()) do
+		if other:GetAttribute("Role") == "abomination" and other.Character then
+			return other.Character:FindFirstChild("HumanoidRootPart")
+		end
+	end
+	for _, model in ipairs(Workspace:GetChildren()) do
+		if model:IsA("Model") and model:GetAttribute("Role") == "abomination" then
+			return model:FindFirstChild("HumanoidRootPart")
+		end
+	end
+	return nil
+end
+
+local WHISPERS = { "it's close...", "don't breathe.", "it can hear you.", "stay still...", "it's right there." }
+local nextWhisper = 0
+
+RunService:BindToRenderStep("Fear", Enum.RenderPriority.Camera.Value + 1, function(dt)
+	local r = role()
+	local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+
+	-- Heartbeat: civilians feel the Abomination getting closer
+	local intensity = 0
+	if r == "civilian" and root then
+		local abom = findAbomination()
+		if abom then
+			local d = (abom.Position - root.Position).Magnitude
+			intensity = math.clamp(1 - d / 65, 0, 1)
+		end
+	end
+	local beat = math.abs(math.sin(os.clock() * (3 + intensity * 6)))
+	for _, f in ipairs(vignette) do
+		f.BackgroundTransparency = 1 - intensity * (0.45 + beat * 0.4)
+	end
+	if sounds.heartbeat then
+		if intensity > 0.05 then
+			play("heartbeat")
+			sounds.heartbeat.Volume = intensity
+			sounds.heartbeat.PlaybackSpeed = 0.8 + intensity * 0.8
+		else
+			sounds.heartbeat:Stop()
+		end
+	end
+	if intensity > 0.55 then
+		addShake(intensity * 0.02)
+		if os.clock() > nextWhisper then
+			nextWhisper = os.clock() + 4
+			whisper.Text = WHISPERS[math.random(1, #WHISPERS)]
+			whisper.TextTransparency = 0.1
+			TweenService:Create(whisper, TweenInfo.new(2.5), { TextTransparency = 1 }):Play()
+		end
+	end
+
+	-- Hiding camera
+	if hiddenAt then
+		camera.CameraType = Enum.CameraType.Scriptable
+		local breathe = math.sin(os.clock() * 1.6) * 0.02
+		camera.CFrame = hiddenAt * CFrame.Angles(0, yaw, 0) * CFrame.Angles(pitch + breathe, 0, 0)
+	end
+
+	-- Shake
+	if shake > 0.001 then
+		local s = shake * 0.35
+		camera.CFrame *= CFrame.new(math.random(-100, 100) / 100 * s, math.random(-100, 100) / 100 * s, 0) * CFrame.Angles(0, 0, math.random(-100, 100) / 100 * s * 0.03)
+		shake = math.max(0, shake - dt * 2.2)
+	end
+end)
+
+---------------------------------------------------------------------------
+-- Server events
+---------------------------------------------------------------------------
+ToClient.OnClientEvent:Connect(function(kind, a, b, c)
+	if kind == "Blast" then
+		shakeFrom(a, 0.25 + math.min(c or 0, 10) * 0.05, 90)
+		play("smash", 0.6)
+	elseif kind == "Smash" then
+		shakeFrom(b, 0.4, 70)
+	elseif kind == "Roar" then
+		shakeFrom(a, 1.6, 140)
+		play("roar", 1)
+		if role() == "civilian" then
+			screenFlash(Color3.fromRGB(120, 0, 0), 0.35, 1.2)
+		end
+	elseif kind == "Roared" then
+		whisper.Text = "it sensed you."
+		whisper.TextTransparency = 0
+		TweenService:Create(whisper, TweenInfo.new(2.5), { TextTransparency = 1 }):Play()
+	elseif kind == "Clap" then
+		shakeFrom(a, 2, 120)
+		screenFlash(Color3.new(1, 1, 1), 0.25, 0.5)
+	elseif kind == "Stomp" or kind == "Shatter" then
+		shakeFrom(a, 1, 100)
+	elseif kind == "Collapse" then
+		shakeFrom(a, 1.4, 130)
+	elseif kind == "ChaosEvent" then
+		if a == "blackout" then
+			blackout = true
+		elseif a == "failing" then
+			failing = true
+			play("alarm", 0.5)
+		end
+		addShake(0.8)
+	elseif kind == "Hidden" then
+		hiddenAt = a
+		yaw, pitch = 0, 0
+		slats.Visible = true
+	elseif kind == "Unhidden" then
+		hiddenAt = nil
+		slats.Visible = false
+		camera.CameraType = Enum.CameraType.Custom
+	elseif kind == "Exposed" then
+		addShake(2)
+		screenFlash(Color3.fromRGB(255, 220, 200), 0.6, 0.6)
+	elseif kind == "Caught" then
+		play("scream", 1)
+		screenFlash(Color3.fromRGB(150, 0, 0), 0.9, 2.5)
+		addShake(3)
+	elseif kind == "Reveal" then
+		for _, position in ipairs(a or {}) do
+			heartMarker(position, b or 2)
+		end
+	elseif kind == "Noise" then
+		ripple(a)
+	elseif kind == "State" and a.phase == "lobby" then
+		blackout = false
+		failing = false
+		if sounds.alarm then
+			sounds.alarm:Stop()
+		end
+	end
+end)
+
+-- Back to normal camera if you respawn
+player.CharacterAdded:Connect(function()
+	hiddenAt = nil
+	slats.Visible = false
+	camera.CameraType = Enum.CameraType.Custom
+end)
+]]></ProtectedString></Properties></Item><Item class="LocalScript" referent="RBX18"><Properties><string name="Name">HUD</string><ProtectedString name="Source"><![CDATA[-- On-screen UI: round status, role reveal, giant health, chaos meter, civilian meters,
+-- announcements, results, costume shop and spectating.
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+
+local player = Players.LocalPlayer
+local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local Remotes = ReplicatedStorage:WaitForChild("Remotes")
+local ToClient = Remotes:WaitForChild("ToClient")
+local ShopRF = Remotes:WaitForChild("Shop")
+
+local GREEN = Color3.fromRGB(90, 200, 60)
+local RED = Color3.fromRGB(220, 50, 40)
+local BG = Color3.fromRGB(12, 12, 16)
+local TEXT = Color3.fromRGB(235, 235, 240)
+
+local function new(class, props, children)
+	local inst = Instance.new(class)
+	for k, v in pairs(props or {}) do
+		if k ~= "Parent" then
+			inst[k] = v
+		end
+	end
+	for _, c in ipairs(children or {}) do
+		c.Parent = inst
+	end
+	inst.Parent = props and props.Parent
+	return inst
+end
+local function corner(r)
+	return new("UICorner", { CornerRadius = UDim.new(0, r or 8) })
+end
+local function label(props)
+	local defaults = { BackgroundTransparency = 1, Font = Enum.Font.GothamBold, TextColor3 = TEXT, TextSize = 16, TextWrapped = true, RichText = true }
+	for k, v in pairs(props) do
+		defaults[k] = v
+	end
+	return new("TextLabel", defaults)
+end
+
+local gui = new("ScreenGui", { Name = "LockdownHUD", ResetOnSpawn = false, IgnoreGuiInset = false, Parent = player:WaitForChild("PlayerGui") })
+
+---------------------------------------------------------------------------
+-- Top status bar
+---------------------------------------------------------------------------
+local top = new("Frame", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 6), Size = UDim2.fromOffset(460, 54), BackgroundColor3 = BG, BackgroundTransparency = 0.2, Parent = gui }, { corner(10) })
+local phaseLabel = label({ Size = UDim2.new(1, -16, 0, 24), Position = UDim2.fromOffset(8, 4), Font = Enum.Font.GothamBlack, TextSize = 18, Text = "", Parent = top })
+local chaosBack = new("Frame", { Position = UDim2.new(0, 8, 0, 34), Size = UDim2.new(1, -16, 0, 12), BackgroundColor3 = Color3.fromRGB(40, 40, 45), Parent = top }, { corner(6) })
+local chaosFill = new("Frame", { Size = UDim2.fromScale(0, 1), BackgroundColor3 = Color3.fromRGB(255, 120, 30), Parent = chaosBack }, { corner(6) })
+label({ Size = UDim2.fromScale(1, 1), Text = "CHAOS", TextSize = 10, Font = Enum.Font.GothamBlack, TextColor3 = Color3.new(1, 1, 1), Parent = chaosBack })
+
+---------------------------------------------------------------------------
+-- Giant health bars (left: Hulk, right: Abomination)
+---------------------------------------------------------------------------
+local function hpBar(anchorX, color, name)
+	local frame = new("Frame", { Visible = false, AnchorPoint = Vector2.new(anchorX, 0), Position = UDim2.new(anchorX, (anchorX == 0 and 12 or -12), 0, 70), Size = UDim2.fromOffset(240, 34), BackgroundColor3 = BG, BackgroundTransparency = 0.25, Parent = gui }, { corner(8) })
+	label({ Size = UDim2.new(1, -12, 0, 14), Position = UDim2.fromOffset(6, 2), TextSize = 12, Font = Enum.Font.GothamBlack, Text = name, TextXAlignment = Enum.TextXAlignment.Left, Parent = frame })
+	local back = new("Frame", { Position = UDim2.fromOffset(6, 18), Size = UDim2.new(1, -12, 0, 10), BackgroundColor3 = Color3.fromRGB(40, 40, 45), Parent = frame }, { corner(5) })
+	local fill = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = color, Parent = back }, { corner(5) })
+	return { frame = frame, fill = fill, name = frame:FindFirstChildOfClass("TextLabel") }
+end
+local bars = {
+	hulk = hpBar(0, GREEN, string.upper(Config.Names.hulk)),
+	abomination = hpBar(1, RED, string.upper(Config.Names.abomination)),
+}
+
+---------------------------------------------------------------------------
+-- Civilian meters (stamina + flashlight) and giant cooldowns
+---------------------------------------------------------------------------
+local meters = new("Frame", { Visible = false, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -16), Size = UDim2.fromOffset(300, 46), BackgroundTransparency = 1, Parent = gui })
+local function meter(y, color, text)
+	local back = new("Frame", { Position = UDim2.fromOffset(0, y), Size = UDim2.new(1, 0, 0, 18), BackgroundColor3 = Color3.fromRGB(30, 30, 35), BackgroundTransparency = 0.2, Parent = meters }, { corner(6) })
+	local fill = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = color, Parent = back }, { corner(6) })
+	label({ Size = UDim2.fromScale(1, 1), Text = text, TextSize = 11, Font = Enum.Font.GothamBlack, Parent = back })
+	return fill
+end
+local staminaFill = meter(0, Color3.fromRGB(80, 170, 255), "STAMINA  (Shift to sprint — it makes noise)")
+local batteryFill = meter(24, Color3.fromRGB(255, 220, 90), "FLASHLIGHT  (F) — the monster can see it")
+
+local cooldownBox = new("Frame", { Visible = false, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -16), Size = UDim2.fromOffset(420, 40), BackgroundTransparency = 1, Parent = gui }, { new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 8) }) })
+local cooldowns = {}
+local function cooldownChip(key, text)
+	local chip = new("Frame", { Size = UDim2.fromOffset(130, 36), BackgroundColor3 = BG, BackgroundTransparency = 0.2, Parent = cooldownBox }, { corner(8) })
+	local fill = new("Frame", { Size = UDim2.fromScale(0, 1), BackgroundColor3 = Color3.fromRGB(255, 255, 255), BackgroundTransparency = 0.8, Parent = chip }, { corner(8) })
+	label({ Size = UDim2.fromScale(1, 1), Text = text, TextSize = 13, Font = Enum.Font.GothamBlack, Parent = chip })
+	cooldowns[key] = { chip = chip, fill = fill, readyAt = 0, length = 1 }
+	return chip
+end
+
+---------------------------------------------------------------------------
+-- Announcements, role reveal, toasts
+---------------------------------------------------------------------------
+local announce = label({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 120), Size = UDim2.new(0.8, 0, 0, 40), Font = Enum.Font.GothamBlack, TextSize = 26, TextStrokeTransparency = 0.3, Text = "", Parent = gui })
+local announceToken = 0
+local function showAnnouncement(text, style)
+	announceToken += 1
+	local token = announceToken
+	announce.Text = text
+	announce.TextColor3 = if style == "bad" then Color3.fromRGB(255, 90, 80) elseif style == "good" then Color3.fromRGB(130, 255, 120) else Color3.fromRGB(255, 220, 120)
+	announce.TextTransparency = 0
+	task.delay(3.5, function()
+		if token == announceToken then
+			TweenService:Create(announce, TweenInfo.new(0.6), { TextTransparency = 1 }):Play()
+		end
+	end)
+end
+
+local toast = label({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -80), Size = UDim2.new(0.6, 0, 0, 28), TextSize = 18, Text = "", TextStrokeTransparency = 0.4, Parent = gui })
+local function showToast(text)
+	toast.Text = text
+	toast.TextTransparency = 0
+	task.delay(2.5, function()
+		if toast.Text == text then
+			toast.TextTransparency = 1
+		end
+	end)
+end
+
+local reveal = new("Frame", { Visible = false, Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.15, ZIndex = 20, Parent = gui })
+local revealTitle = label({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.42), Size = UDim2.new(0.9, 0, 0, 80), Font = Enum.Font.GothamBlack, TextScaled = true, ZIndex = 21, Parent = reveal })
+local revealText = label({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.52), Size = UDim2.new(0.7, 0, 0, 120), TextSize = 20, ZIndex = 21, Parent = reveal })
+
+local ROLE_INFO = {
+	civilian = { title = "YOU ARE A CIVILIAN", color = Color3.fromRGB(240, 240, 240), text = "Hide. Stay quiet. Lockers, desks, stalls, crates, vents — anything. Sprinting makes noise and your flashlight gives you away. If your hiding spot gets smashed, RUN." },
+	hulk = { title = "YOU ARE " .. string.upper(Config.Names.hulk), color = GREEN, text = "Keep the " .. Config.Names.abomination .. " away from the civilians. Click / F: SMASH · Q: THUNDERCLAP (stuns) · R: LEAP. Every hit sends it crashing through walls... and destroys hiding spots. You can die." },
+	abomination = { title = "YOU ARE THE " .. string.upper(Config.Names.abomination), color = RED, text = "Find every civilian. Click / F: SMASH (grabs anyone in reach) · Q: ROAR (reveals nearby civilians) · R: LEAP · hold E on a hiding spot to SEARCH. Listen for running footsteps." },
+}
+
+local function showRole(role)
+	local info = ROLE_INFO[role]
+	if not info then
+		return
+	end
+	revealTitle.Text = info.title
+	revealTitle.TextColor3 = info.color
+	revealText.Text = info.text
+	reveal.Visible = true
+	revealTitle.TextTransparency = 1
+	TweenService:Create(revealTitle, TweenInfo.new(0.6), { TextTransparency = 0 }):Play()
+	task.delay(5, function()
+		reveal.Visible = false
+	end)
+end
+
+---------------------------------------------------------------------------
+-- Results
+---------------------------------------------------------------------------
+local results = new("Frame", { Visible = false, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(460, 220), BackgroundColor3 = BG, BackgroundTransparency = 0.05, ZIndex = 15, Parent = gui }, { corner(14), new("UIStroke", { Color = Color3.fromRGB(255, 220, 120), Thickness = 2 }) })
+local resultsTitle = label({ Position = UDim2.fromOffset(16, 16), Size = UDim2.new(1, -32, 0, 48), Font = Enum.Font.GothamBlack, TextScaled = true, ZIndex = 16, Parent = results })
+local resultsText = label({ Position = UDim2.fromOffset(16, 70), Size = UDim2.new(1, -32, 0, 60), TextSize = 18, ZIndex = 16, Parent = results })
+local rewardText = label({ Position = UDim2.fromOffset(16, 140), Size = UDim2.new(1, -32, 0, 60), Font = Enum.Font.GothamBlack, TextSize = 24, TextColor3 = Color3.fromRGB(255, 220, 90), ZIndex = 16, Parent = results })
+
+---------------------------------------------------------------------------
+-- Costume shop
+---------------------------------------------------------------------------
+local profile = nil
+local shop = new("Frame", { Visible = false, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.52), Size = UDim2.fromScale(0.86, 0.76), BackgroundColor3 = BG, ZIndex = 10, Parent = gui }, {
+	corner(14), new("UISizeConstraint", { MaxSize = Vector2.new(620, 560) }), new("UIStroke", { Color = Color3.fromRGB(150, 90, 220), Thickness = 2 }),
+})
+local shopTitle = label({ Position = UDim2.fromOffset(16, 10), Size = UDim2.new(1, -70, 0, 30), Font = Enum.Font.GothamBlack, TextSize = 22, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 11, Parent = shop })
+local closeShop = new("TextButton", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 10), Size = UDim2.fromOffset(32, 32), BackgroundColor3 = Color3.fromRGB(50, 50, 60), Text = "✕", TextColor3 = TEXT, Font = Enum.Font.GothamBold, TextSize = 16, ZIndex = 11, Parent = shop }, { corner(8) })
+local shopList = new("ScrollingFrame", { Position = UDim2.fromOffset(12, 50), Size = UDim2.new(1, -24, 1, -62), BackgroundTransparency = 1, BorderSizePixel = 0, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, ScrollBarThickness = 6, ZIndex = 11, Parent = shop }, {
+	new("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }),
+})
+closeShop.MouseButton1Click:Connect(function()
+	shop.Visible = false
+end)
+
+local function renderShop()
+	for _, c in ipairs(shopList:GetChildren()) do
+		if c:IsA("GuiObject") then
+			c:Destroy()
+		end
+	end
+	shopTitle.Text = "🎭 Costume Shop  ·  🪙 " .. (profile and profile.coins or 0)
+	local order = 0
+	for _, role in ipairs({ "hulk", "abomination", "civilian" }) do
+		order += 1
+		label({ Size = UDim2.new(1, 0, 0, 26), Text = string.upper(Config.Names[role]), Font = Enum.Font.GothamBlack, TextSize = 16, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = if role == "hulk" then GREEN elseif role == "abomination" then RED else TEXT, LayoutOrder = order, ZIndex = 12, Parent = shopList })
+		for _, id in ipairs(Config.CostumeOrder[role]) do
+			order += 1
+			local costume = Config.Costumes[id]
+			local owned = profile and profile.owned[id]
+			local equipped = profile and profile.equipped[role] == id
+			local row = new("Frame", { Size = UDim2.new(1, -8, 0, 44), BackgroundColor3 = Color3.fromRGB(30, 30, 38), LayoutOrder = order, ZIndex = 12, Parent = shopList }, { corner(8) })
+			new("Frame", { Position = UDim2.fromOffset(8, 8), Size = UDim2.fromOffset(28, 28), BackgroundColor3 = costume.skin or costume.shirt, ZIndex = 13, Parent = row }, { corner(14) })
+			label({ Position = UDim2.fromOffset(44, 0), Size = UDim2.new(1, -190, 1, 0), Text = costume.name, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 13, Parent = row })
+			local button = new("TextButton", {
+				AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, 0), Size = UDim2.fromOffset(130, 30),
+				BackgroundColor3 = if equipped then Color3.fromRGB(60, 60, 70) elseif owned then Color3.fromRGB(70, 120, 200) else Color3.fromRGB(230, 180, 40),
+				Text = if equipped then "Equipped" elseif owned then "Equip" else "🪙 " .. costume.price,
+				TextColor3 = Color3.new(1, 1, 1), Font = Enum.Font.GothamBlack, TextSize = 14, ZIndex = 13, Parent = row,
+			}, { corner(8) })
+			button.MouseButton1Click:Connect(function()
+				if equipped then
+					return
+				end
+				local ok, message = ShopRF:InvokeServer(if owned then "equip" else "buy", id)
+				showToast(message or "")
+			end)
+		end
+	end
+end
+
+---------------------------------------------------------------------------
+-- Spectating (after you're caught or killed)
+---------------------------------------------------------------------------
+local spectateBar = new("Frame", { Visible = false, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -16), Size = UDim2.fromOffset(360, 40), BackgroundColor3 = BG, BackgroundTransparency = 0.2, Parent = gui }, { corner(10) })
+local spectateName = label({ Position = UDim2.fromOffset(50, 0), Size = UDim2.new(1, -100, 1, 0), Text = "", Parent = spectateBar })
+local prevButton = new("TextButton", { Position = UDim2.fromOffset(6, 5), Size = UDim2.fromOffset(36, 30), Text = "◀", BackgroundColor3 = Color3.fromRGB(50, 50, 60), TextColor3 = TEXT, Font = Enum.Font.GothamBold, TextSize = 16, Parent = spectateBar }, { corner(6) })
+local nextButton = new("TextButton", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -6, 0, 5), Size = UDim2.fromOffset(36, 30), Text = "▶", BackgroundColor3 = Color3.fromRGB(50, 50, 60), TextColor3 = TEXT, Font = Enum.Font.GothamBold, TextSize = 16, Parent = spectateBar }, { corner(6) })
+local spectateIndex = 1
+local spectating = false
+
+local function spectateTargets()
+	local list = {}
+	for _, model in ipairs(workspace:GetChildren()) do
+		if model:IsA("Model") and model:GetAttribute("Role") and model:FindFirstChildOfClass("Humanoid") and not Players:GetPlayerFromCharacter(model) then
+			table.insert(list, model) -- AI giants
+		end
+	end
+	for _, other in ipairs(Players:GetPlayers()) do
+		local role = other:GetAttribute("Role")
+		if other ~= player and other.Character and (role == "civilian" or role == "hulk" or role == "abomination") then
+			table.insert(list, other.Character)
+		end
+	end
+	return list
+end
+
+local function cycle(step)
+	local list = spectateTargets()
+	if #list == 0 then
+		spectateName.Text = "Nobody to watch"
+		return
+	end
+	spectateIndex = (spectateIndex - 1 + step) % #list + 1
+	local target = list[spectateIndex]
+	local humanoid = target:FindFirstChildOfClass("Humanoid")
+	workspace.CurrentCamera.CameraSubject = humanoid
+	spectateName.Text = "👁 " .. target.Name
+end
+prevButton.MouseButton1Click:Connect(function()
+	cycle(-1)
+end)
+nextButton.MouseButton1Click:Connect(function()
+	cycle(1)
+end)
+
+---------------------------------------------------------------------------
+-- Role-dependent layout
+---------------------------------------------------------------------------
+local function applyRole()
+	local role = player:GetAttribute("Role")
+	meters.Visible = role == "civilian"
+	cooldownBox.Visible = role == "hulk" or role == "abomination"
+	for _, c in ipairs(cooldownBox:GetChildren()) do
+		if c:IsA("Frame") then
+			c:Destroy()
+		end
+	end
+	table.clear(cooldowns)
+	if role == "hulk" then
+		cooldownChip("smash", "SMASH (Click/F)")
+		cooldownChip("clap", "CLAP (Q)")
+		cooldownChip("leap", "LEAP (R)")
+	elseif role == "abomination" then
+		cooldownChip("smash", "SMASH (Click/F)")
+		cooldownChip("roar", "ROAR (Q)")
+		cooldownChip("leap", "LEAP (R)")
+	end
+	local wasSpectating = spectating
+	spectating = role == "spectator"
+	spectateBar.Visible = spectating
+	if spectating and not wasSpectating then
+		task.delay(1, function()
+			cycle(0)
+		end)
+	elseif not spectating and wasSpectating then
+		local character = player.Character
+		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+		if humanoid then
+			workspace.CurrentCamera.CameraSubject = humanoid
+		end
+	end
+end
+player:GetAttributeChangedSignal("Role"):Connect(applyRole)
+applyRole()
+
+-- Stamina comes from the Controls script through an attribute
+player:GetAttributeChangedSignal("Stamina"):Connect(function()
+	staminaFill.Size = UDim2.fromScale(math.clamp((player:GetAttribute("Stamina") or 0) / Config.Civilian.stamina, 0, 1), 1)
+end)
+
+---------------------------------------------------------------------------
+-- Server events
+---------------------------------------------------------------------------
+local PHASE_TEXT = { lobby = "LOBBY", hide = "HIDE!", hunt = "THE HUNT", results = "RESULTS" }
+
+ToClient.OnClientEvent:Connect(function(kind, a, b, c, d)
+	if kind == "State" then
+		local s = a
+		local t = math.ceil(s.timeLeft)
+		local clock = string.format("%d:%02d", t // 60, t % 60)
+		if s.phase == "lobby" then
+			phaseLabel.Text = "🏢 Next lockdown in " .. clock .. "   ·   🪙 " .. (profile and profile.coins or 0)
+		else
+			phaseLabel.Text = string.format("%s  %s   ·   👥 %d/%d left", PHASE_TEXT[s.phase] or "", clock, s.civiliansLeft, s.civiliansTotal)
+		end
+		chaosFill.Size = UDim2.fromScale(math.clamp(s.chaos / 100, 0, 1), 1)
+		chaosBack.Visible = s.phase ~= "lobby"
+		bars.hulk.frame.Visible = s.phase == "hide" or s.phase == "hunt"
+		bars.abomination.frame.Visible = s.phase == "hide" or s.phase == "hunt"
+	elseif kind == "GiantHP" then
+		local bar = bars[a]
+		if bar then
+			bar.fill.Size = UDim2.fromScale(math.clamp(b / c, 0, 1), 1)
+			local name = string.upper(Config.Names[a])
+			bar.name.Text = if d == "dead" then name .. "  —  DEAD" elseif d == "ko" then name .. "  —  KNOCKED OUT" else name
+		end
+	elseif kind == "Chaos" then
+		chaosFill.Size = UDim2.fromScale(math.clamp(a / 100, 0, 1), 1)
+	elseif kind == "ChaosEvent" then
+		showAnnouncement("⚠️ " .. b, "warn")
+	elseif kind == "Announce" then
+		showAnnouncement(a, b)
+	elseif kind == "Toast" then
+		showToast(a)
+	elseif kind == "RoleReveal" then
+		showRole(a)
+	elseif kind == "Cooldown" then
+		local cd = cooldowns[a]
+		if cd then
+			cd.readyAt = os.clock() + b
+			cd.length = b
+		end
+	elseif kind == "Battery" then
+		batteryFill.Size = UDim2.fromScale(math.clamp(a / Config.Civilian.flashlightBattery, 0, 1), 1)
+	elseif kind == "Results" then
+		local hulkWon = a == "hulk"
+		resultsTitle.Text = if hulkWon then "🟢 " .. string.upper(Config.Names.hulk) .. " & SURVIVORS WIN" else "🔴 THE " .. string.upper(Config.Names.abomination) .. " WINS"
+		resultsTitle.TextColor3 = if hulkWon then GREEN else RED
+		resultsText.Text = b
+		rewardText.Text = ""
+		results.Visible = true
+		task.delay(Config.Round.results, function()
+			results.Visible = false
+		end)
+	elseif kind == "Reward" then
+		rewardText.Text = (if b then "🏆 You won!  " else "") .. "+🪙 " .. a
+	elseif kind == "Profile" then
+		profile = a
+		if shop.Visible then
+			renderShop()
+		end
+	elseif kind == "OpenShop" then
+		shop.Visible = true
+		renderShop()
+	elseif kind == "Exposed" then
+		showAnnouncement("💥 YOUR HIDING SPOT WAS DESTROYED — RUN!", "bad")
+	elseif kind == "Caught" then
+		showAnnouncement("☠️ YOU WERE CAUGHT", "bad")
+	end
+end)
+
+-- Cooldown chips fill back up
+RunService.RenderStepped:Connect(function()
+	local now = os.clock()
+	for _, cd in pairs(cooldowns) do
+		local left = math.max(0, cd.readyAt - now)
+		cd.fill.Size = UDim2.fromScale(1 - left / math.max(cd.length, 0.01), 1)
+	end
+end)
+
+UserInputService.InputBegan:Connect(function(input, processed)
+	if not processed and input.KeyCode == Enum.KeyCode.Escape and shop.Visible then
+		shop.Visible = false
+	end
+end)
+]]></ProtectedString></Properties></Item></Item></Item></Item></roblox>
