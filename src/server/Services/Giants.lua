@@ -69,6 +69,223 @@ local function describe(role, costume)
 	return desc
 end
 
+-- Muscle/bone shapes welded onto the rig before it's scaled up. `scale` multiplies the
+-- body part's size; `offset` is relative to the part's center (in units of its size).
+local function mass(model, p, scale, offset, props)
+	local spec = {
+		Name = "Muscle",
+		Shape = Enum.PartType.Ball,
+		Size = p.Size * scale,
+		CFrame = p.CFrame * CFrame.new(p.Size * (offset or Vector3.zero)),
+		Color = p.Color,
+		Material = p.Material,
+	}
+	for k, v in pairs(props or {}) do
+		spec[k] = v
+	end
+	return weldTo(model, p, spec)
+end
+
+-- A spike/claw/fang: a wedge whose point aims along `direction` (in the part's space)
+local function spike(model, p, size, offset, rotation, color, material)
+	return weldTo(model, p, {
+		class = "WedgePart",
+		Name = "Spike",
+		Size = size,
+		CFrame = p.CFrame * CFrame.new(p.Size * offset) * rotation,
+		Color = color,
+		Material = material,
+	})
+end
+
+local function decorateHulk(model, costume)
+	local get = function(name)
+		return model:FindFirstChild(name)
+	end
+	local head, torso, lower = get("Head"), get("UpperTorso"), get("LowerTorso")
+	local skin, shorts = costume.skin, costume.pants
+	local dark = skin:Lerp(Color3.new(0, 0, 0), 0.25)
+	for _, d in ipairs(model:GetChildren()) do
+		if d:IsA("BasePart") and d.Name ~= "HumanoidRootPart" then
+			d.Material = Enum.Material.SmoothPlastic
+		end
+	end
+	for _, name in ipairs({ "LeftLowerLeg", "RightLowerLeg", "LeftFoot", "RightFoot" }) do
+		local p = get(name)
+		if p then
+			p.Color = skin -- the shorts end at the knee
+		end
+	end
+
+	-- Torso: traps, delts, pecs, abs, lats
+	mass(model, torso, Vector3.new(1.15, 0.55, 0.95), Vector3.new(0, 0.45, 0.05)) -- traps / thick neck
+	for _, side in ipairs({ -1, 1 }) do
+		mass(model, torso, Vector3.new(0.75, 0.75, 1.25), Vector3.new(side * 0.55, 0.32, 0)) -- delts
+		mass(model, torso, Vector3.new(0.6, 0.5, 0.6), Vector3.new(side * 0.22, 0.15, -0.38)) -- pecs
+		for row = 0, 2 do
+			mass(model, torso, Vector3.new(0.2, 0.17, 0.3), Vector3.new(side * 0.1, -0.12 - row * 0.15, -0.5), { Color = dark }) -- abs
+		end
+	end
+	mass(model, torso, Vector3.new(1.25, 0.9, 0.8), Vector3.new(0, 0.05, 0.3)) -- lats / back
+	if lower then
+		mass(model, lower, Vector3.new(1.15, 1.6, 1.15), Vector3.new(0, 0, 0), { Color = shorts, Material = Enum.Material.Fabric })
+	end
+
+	-- Arms: biceps, forearms, giant fists
+	for _, side in ipairs({ "Left", "Right" }) do
+		local upper, fore, hand = get(side .. "UpperArm"), get(side .. "LowerArm"), get(side .. "Hand")
+		if upper then
+			mass(model, upper, Vector3.new(1.55, 1.0, 1.45), Vector3.new(0, 0.05, -0.08))
+		end
+		if fore then
+			mass(model, fore, Vector3.new(1.55, 1.05, 1.45), Vector3.new(0, 0.1, 0))
+		end
+		if hand then
+			mass(model, hand, Vector3.new(1.9, 5, 1.8), Vector3.new(0, -0.6, 0)) -- fist
+		end
+		-- Legs: quads in torn shorts, big calves
+		local thigh, shin, foot = get(side .. "UpperLeg"), get(side .. "LowerLeg"), get(side .. "Foot")
+		if thigh then
+			mass(model, thigh, Vector3.new(1.5, 1.0, 1.4), Vector3.new(0, 0.05, 0), { Color = shorts, Material = Enum.Material.Fabric })
+			for k = -1, 1 do
+				spike(model, thigh, Vector3.new(0.35, thigh.Size.Y * 0.35, 0.35), Vector3.new(k * 0.35, -0.6, -0.55), CFrame.Angles(math.pi, 0, 0), shorts, Enum.Material.Fabric) -- ragged hem
+			end
+		end
+		if shin then
+			mass(model, shin, Vector3.new(1.35, 0.85, 1.35), Vector3.new(0, 0.15, 0.05))
+		end
+		if foot then
+			mass(model, foot, Vector3.new(1.4, 2.4, 1.5), Vector3.new(0, 0, -0.1))
+		end
+	end
+
+	-- Head: wide jaw, scowl, teeth, heavy brow, shaggy hair, pale angry eyes
+	local hs = head.Size
+	mass(model, head, Vector3.new(1.1, 0.45, 0.95), Vector3.new(0, -0.38, -0.05)) -- jaw
+	weldTo(model, head, { Name = "Brow", Size = Vector3.new(hs.X * 0.95, hs.Y * 0.16, hs.Z * 0.25), CFrame = head.CFrame * CFrame.new(0, hs.Y * 0.18, -hs.Z * 0.45), Color = dark })
+	weldTo(model, head, { Name = "Mouth", Size = Vector3.new(hs.X * 0.6, hs.Y * 0.12, 0.08), CFrame = head.CFrame * CFrame.new(0, -hs.Y * 0.28, -hs.Z * 0.55), Color = Color3.fromRGB(35, 10, 10) })
+	weldTo(model, head, { Name = "Teeth", Size = Vector3.new(hs.X * 0.5, hs.Y * 0.05, 0.09), CFrame = head.CFrame * CFrame.new(0, -hs.Y * 0.25, -hs.Z * 0.555), Color = Color3.fromRGB(235, 230, 210) })
+	for _, side in ipairs({ -1, 1 }) do
+		weldTo(model, head, { Name = "Eye", Size = Vector3.new(hs.X * 0.2, hs.Y * 0.07, 0.06), CFrame = head.CFrame * CFrame.new(side * hs.X * 0.21, hs.Y * 0.07, -hs.Z / 2 - 0.04) * CFrame.Angles(0, 0, side * -0.3), Color = Color3.fromRGB(200, 255, 160), Material = Enum.Material.Neon })
+	end
+	local hair = Color3.fromRGB(18, 18, 16)
+	weldTo(model, head, { Name = "Hair", Size = Vector3.new(hs.X * 1.08, hs.Y * 0.32, hs.Z * 1.08), CFrame = head.CFrame * CFrame.new(0, hs.Y * 0.42, 0.04), Color = hair, Material = Enum.Material.Fabric })
+	for k = -2, 2 do
+		spike(model, head, Vector3.new(hs.X * 0.2, hs.Y * 0.35, hs.Z * 0.5), Vector3.new(k * 0.2, 0.6, 0.2), CFrame.Angles(math.rad(-20), 0, 0), hair, Enum.Material.Fabric)
+		spike(model, head, Vector3.new(hs.X * 0.22, hs.Y * 0.45, hs.Z * 0.3), Vector3.new(k * 0.2, 0.15, 0.55), CFrame.Angles(math.pi, 0, 0), hair, Enum.Material.Fabric) -- shag at the back
+	end
+
+	if costume.armor then
+		for _, side in ipairs({ -1, 1 }) do
+			weldTo(model, torso, { Name = "Pauldron", Shape = Enum.PartType.Ball, Size = Vector3.new(torso.Size.X * 0.55, torso.Size.Y * 0.4, torso.Size.Z * 1.4), CFrame = torso.CFrame * CFrame.new(side * torso.Size.X * 0.6, torso.Size.Y * 0.5, 0), Color = costume.armor, Material = Enum.Material.Metal })
+		end
+		weldTo(model, torso, { Name = "Strap", Size = Vector3.new(torso.Size.X * 0.2, torso.Size.Y * 1.3, torso.Size.Z * 1.35), CFrame = torso.CFrame * CFrame.Angles(0, 0, math.rad(35)), Color = Color3.fromRGB(90, 60, 30), Material = Enum.Material.Fabric })
+	end
+end
+
+local function decorateAbomination(model, costume)
+	local get = function(name)
+		return model:FindFirstChild(name)
+	end
+	local head, torso, lower = get("Head"), get("UpperTorso"), get("LowerTorso")
+	local skin = costume.skin
+	local bone = if costume.glow then costume.spikes else Color3.fromRGB(215, 205, 180):Lerp(costume.spikes, 0.25)
+	local spikeMat = if costume.glow then Enum.Material.Neon else Enum.Material.Slate
+	local ridge = costume.spikes
+	for _, d in ipairs(model:GetChildren()) do
+		if d:IsA("BasePart") and d.Name ~= "HumanoidRootPart" then
+			d.Material = Enum.Material.Slate -- rough, scaly hide
+		end
+	end
+
+	-- Hunched back: a massive hump and two rows of big spines
+	mass(model, torso, Vector3.new(1.3, 1.1, 1.0), Vector3.new(0, 0.35, 0.45)) -- hump
+	mass(model, torso, Vector3.new(1.2, 0.7, 1.0), Vector3.new(0, 0.5, -0.05)) -- neck bulk
+	for k = 0, 5 do
+		for _, side in ipairs({ -0.18, 0.18 }) do
+			local height = torso.Size.Y * (0.55 - k * 0.05)
+			spike(model, torso, Vector3.new(0.25, height, torso.Size.Z * 0.6), Vector3.new(side, 0.65 - k * 0.22, 0.85), CFrame.Angles(math.rad(-25), 0, 0) * CFrame.Angles(0, math.pi, 0), ridge, spikeMat)
+		end
+	end
+	if lower then
+		spike(model, lower, Vector3.new(0.25, lower.Size.Y * 1.6, lower.Size.Z * 0.7), Vector3.new(0, 0, 0.8), CFrame.Angles(0, math.pi, 0), ridge, spikeMat)
+	end
+	-- Shoulder horns
+	for _, side in ipairs({ -1, 1 }) do
+		mass(model, torso, Vector3.new(0.8, 0.8, 1.2), Vector3.new(side * 0.58, 0.35, 0))
+		for k = 0, 2 do
+			spike(model, torso, Vector3.new(0.3, torso.Size.Y * 0.45, torso.Size.Z * 0.35), Vector3.new(side * (0.45 + k * 0.12), 0.75, 0.1 - k * 0.15), CFrame.Angles(0, 0, side * math.rad(-35)), bone, spikeMat)
+		end
+	end
+	-- Exposed ribcage on the front
+	for row = 0, 3 do
+		for _, side in ipairs({ -1, 1 }) do
+			weldTo(model, torso, { Name = "Rib", Size = Vector3.new(torso.Size.X * 0.32, torso.Size.Y * 0.06, 0.12), CFrame = torso.CFrame * CFrame.new(side * torso.Size.X * 0.2, torso.Size.Y * (0.15 - row * 0.14), -torso.Size.Z * 0.52) * CFrame.Angles(0, 0, side * math.rad(-12)), Color = ridge, Material = spikeMat })
+		end
+	end
+
+	-- Arms: thick, bladed forearms, long claws
+	for _, side in ipairs({ "Left", "Right" }) do
+		local upper, fore, hand = get(side .. "UpperArm"), get(side .. "LowerArm"), get(side .. "Hand")
+		if upper then
+			mass(model, upper, Vector3.new(1.45, 1.0, 1.4), Vector3.new(0, 0.05, 0))
+			spike(model, upper, Vector3.new(0.25, upper.Size.Y * 0.5, upper.Size.Z * 0.7), Vector3.new(0, -0.35, 0.7), CFrame.Angles(math.rad(-20), math.pi, 0), bone, spikeMat) -- elbow spike
+		end
+		if fore then
+			mass(model, fore, Vector3.new(1.45, 1.05, 1.4), Vector3.new(0, 0.05, 0))
+			for k = 0, 2 do
+				spike(model, fore, Vector3.new(0.22, fore.Size.Y * 0.4, fore.Size.Z * 0.6), Vector3.new(0, 0.3 - k * 0.3, 0.75), CFrame.Angles(math.rad(-30), math.pi, 0), ridge, spikeMat) -- forearm blades
+			end
+		end
+		if hand then
+			mass(model, hand, Vector3.new(1.6, 3.6, 1.5), Vector3.new(0, -0.3, 0))
+			for k = -1, 1 do
+				spike(model, hand, Vector3.new(0.18, hand.Size.Y * 3.5, hand.Size.Z * 0.3), Vector3.new(k * 0.32, -2.6, -0.25), CFrame.Angles(math.rad(180 - 15), 0, 0), bone, spikeMat) -- claws
+			end
+		end
+		-- Legs: heavy thighs, spiked knees, clawed feet
+		local thigh, shin, foot = get(side .. "UpperLeg"), get(side .. "LowerLeg"), get(side .. "Foot")
+		if thigh then
+			mass(model, thigh, Vector3.new(1.45, 1.0, 1.4), Vector3.new(0, 0.05, 0))
+		end
+		if shin then
+			mass(model, shin, Vector3.new(1.3, 0.9, 1.3), Vector3.new(0, 0.1, 0.05))
+			spike(model, shin, Vector3.new(0.25, shin.Size.Y * 0.45, shin.Size.Z * 0.6), Vector3.new(0, 0.4, -0.6), CFrame.Angles(math.rad(15), 0, 0), bone, spikeMat) -- knee spike
+		end
+		if foot then
+			mass(model, foot, Vector3.new(1.4, 2.4, 1.6), Vector3.new(0, 0, -0.15))
+			for k = -1, 1 do
+				spike(model, foot, Vector3.new(0.2, foot.Size.Y * 1.6, foot.Size.Z * 0.45), Vector3.new(k * 0.35, -0.2, -0.85), CFrame.Angles(math.rad(-90), 0, 0), bone, spikeMat) -- toe claws
+			end
+		end
+	end
+
+	-- Head: crest, ear fins, brow ridge, fanged open jaw, glowing slanted eyes
+	local hs = head.Size
+	head.Color = skin:Lerp(Color3.new(0, 0, 0), 0.15)
+	mass(model, head, Vector3.new(1.1, 0.5, 1.05), Vector3.new(0, -0.35, -0.08), { Color = head.Color }) -- jaw
+	weldTo(model, head, { Name = "Maw", Size = Vector3.new(hs.X * 0.75, hs.Y * 0.2, 0.08), CFrame = head.CFrame * CFrame.new(0, -hs.Y * 0.32, -hs.Z * 0.58), Color = Color3.fromRGB(25, 5, 5) })
+	for k = -3, 3 do
+		if k ~= 0 then
+			spike(model, head, Vector3.new(0.08, hs.Y * 0.16, 0.12), Vector3.new(k * 0.1, -0.24, -0.6), CFrame.Angles(math.pi, 0, 0), Color3.fromRGB(235, 230, 210), Enum.Material.SmoothPlastic) -- upper fangs
+			spike(model, head, Vector3.new(0.08, hs.Y * 0.12, 0.12), Vector3.new(k * 0.1, -0.4, -0.6), CFrame.identity, Color3.fromRGB(235, 230, 210), Enum.Material.SmoothPlastic) -- lower fangs
+		end
+	end
+	weldTo(model, head, { Name = "Brow", Size = Vector3.new(hs.X * 1.05, hs.Y * 0.18, hs.Z * 0.35), CFrame = head.CFrame * CFrame.new(0, hs.Y * 0.18, -hs.Z * 0.38) * CFrame.Angles(math.rad(10), 0, 0), Color = ridge, Material = spikeMat })
+	spike(model, head, Vector3.new(0.3, hs.Y * 0.8, hs.Z * 1.3), Vector3.new(0, 0.65, 0.15), CFrame.Angles(math.rad(-15), 0, 0), ridge, spikeMat) -- crest
+	for _, side in ipairs({ -1, 1 }) do
+		spike(model, head, Vector3.new(0.2, hs.Y * 0.6, hs.Z * 0.7), Vector3.new(side * 0.6, 0.15, 0.2), CFrame.Angles(0, 0, side * math.rad(-60)) * CFrame.Angles(math.rad(-20), 0, 0), ridge, spikeMat) -- ear fins
+		local eye = weldTo(model, head, { Name = "Eye", Size = Vector3.new(hs.X * 0.24, hs.Y * 0.1, 0.06), CFrame = head.CFrame * CFrame.new(side * hs.X * 0.22, hs.Y * 0.05, -hs.Z / 2 - 0.04) * CFrame.Angles(0, 0, side * 0.4), Color = costume.eyes, Material = Enum.Material.Neon })
+		if side == 1 then
+			local glow = Instance.new("PointLight")
+			glow.Color = costume.eyes
+			glow.Range = 14
+			glow.Brightness = 1.5
+			glow.Parent = eye
+		end
+	end
+end
+
 local function decorate(model, role, costume)
 	local head = model:FindFirstChild("Head")
 	local torso = model:FindFirstChild("UpperTorso")
@@ -79,56 +296,10 @@ local function decorate(model, role, costume)
 	if face then
 		face:Destroy()
 	end
-	local hs, ts = head.Size, torso.Size
 	if role == "hulk" then
-		-- shaggy black hair, heavy brow, angry eyes, torn shorts (skin on the shins)
-		weldTo(model, head, { Name = "Hair", Size = Vector3.new(hs.X * 1.05, hs.Y * 0.35, hs.Z * 1.05), CFrame = head.CFrame * CFrame.new(0, hs.Y * 0.38, 0.05), Color = Color3.fromRGB(20, 20, 18), Material = Enum.Material.Fabric })
-		weldTo(model, head, { Name = "Brow", Size = Vector3.new(hs.X * 0.85, hs.Y * 0.12, 0.15), CFrame = head.CFrame * CFrame.new(0, hs.Y * 0.18, -hs.Z / 2 - 0.05), Color = costume.skin:Lerp(Color3.new(0, 0, 0), 0.4) })
-		for _, side in ipairs({ -1, 1 }) do
-			weldTo(model, head, { Name = "Eye", Size = Vector3.new(hs.X * 0.18, hs.Y * 0.08, 0.06), CFrame = head.CFrame * CFrame.new(side * hs.X * 0.2, hs.Y * 0.06, -hs.Z / 2 - 0.03) * CFrame.Angles(0, 0, side * -0.25), Color = Color3.fromRGB(255, 255, 230), Material = Enum.Material.Neon })
-		end
-		for _, name in ipairs({ "LeftLowerLeg", "RightLowerLeg", "LeftFoot", "RightFoot" }) do
-			local p = model:FindFirstChild(name)
-			if p then
-				p.Color = costume.skin
-			end
-		end
-		if costume.armor then
-			for _, side in ipairs({ -1, 1 }) do
-				weldTo(model, torso, { Name = "Pauldron", Size = Vector3.new(ts.X * 0.4, ts.Y * 0.2, ts.Z * 1.2), CFrame = torso.CFrame * CFrame.new(side * ts.X * 0.55, ts.Y * 0.45, 0), Color = costume.armor, Material = Enum.Material.Metal })
-			end
-			weldTo(model, torso, { Name = "Strap", Size = Vector3.new(ts.X * 0.18, ts.Y * 1.2, ts.Z * 1.05), CFrame = torso.CFrame * CFrame.Angles(0, 0, math.rad(35)), Color = Color3.fromRGB(90, 60, 30), Material = Enum.Material.Fabric })
-		end
+		decorateHulk(model, costume)
 	else
-		-- spined back, bony ridges, finned skull, glowing eyes
-		local spikeMaterial = if costume.glow then Enum.Material.Neon else Enum.Material.Slate
-		for k = 0, 4 do
-			local spike = weldTo(model, torso, { class = "WedgePart", Name = "Spine", Size = Vector3.new(0.2, ts.Y * 0.25, ts.Z * 0.45), CFrame = torso.CFrame * CFrame.new(0, ts.Y * (0.4 - k * 0.2), ts.Z / 2 + ts.Z * 0.2) * CFrame.Angles(0, math.pi, 0), Color = costume.spikes, Material = spikeMaterial })
-			spike.Name = "Spine"
-		end
-		local lower = model:FindFirstChild("LowerTorso")
-		if lower then
-			weldTo(model, lower, { class = "WedgePart", Name = "Spine", Size = Vector3.new(0.2, lower.Size.Y * 0.8, lower.Size.Z * 0.45), CFrame = lower.CFrame * CFrame.new(0, 0, lower.Size.Z / 2 + lower.Size.Z * 0.2) * CFrame.Angles(0, math.pi, 0), Color = costume.spikes, Material = spikeMaterial })
-		end
-		for _, name in ipairs({ "LeftUpperArm", "RightUpperArm", "LeftLowerLeg", "RightLowerLeg" }) do
-			local p = model:FindFirstChild(name)
-			if p then
-				weldTo(model, p, { class = "WedgePart", Name = "Barb", Size = Vector3.new(0.2, p.Size.Y * 0.5, p.Size.Z * 0.5), CFrame = p.CFrame * CFrame.new(0, 0, p.Size.Z / 2 + p.Size.Z * 0.2) * CFrame.Angles(0, math.pi, 0), Color = costume.spikes, Material = spikeMaterial })
-			end
-		end
-		weldTo(model, head, { class = "WedgePart", Name = "SkullFin", Size = Vector3.new(0.25, hs.Y * 0.5, hs.Z * 1.1), CFrame = head.CFrame * CFrame.new(0, hs.Y * 0.55, 0.1), Color = costume.spikes, Material = spikeMaterial })
-		weldTo(model, head, { Name = "Brow", Size = Vector3.new(hs.X * 1.02, hs.Y * 0.14, hs.Z * 0.3), CFrame = head.CFrame * CFrame.new(0, hs.Y * 0.16, -hs.Z * 0.4), Color = costume.spikes, Material = spikeMaterial })
-		for _, side in ipairs({ -1, 1 }) do
-			local eye = weldTo(model, head, { Name = "Eye", Size = Vector3.new(hs.X * 0.2, hs.Y * 0.1, 0.06), CFrame = head.CFrame * CFrame.new(side * hs.X * 0.21, hs.Y * 0.04, -hs.Z / 2 - 0.03) * CFrame.Angles(0, 0, side * 0.35), Color = costume.eyes, Material = Enum.Material.Neon })
-			if side == 1 then
-				local glow = Instance.new("PointLight")
-				glow.Color = costume.eyes
-				glow.Range = 12
-				glow.Brightness = 1.2
-				glow.Parent = eye
-			end
-		end
-		weldTo(model, head, { Name = "Jaw", Size = Vector3.new(hs.X * 0.7, hs.Y * 0.08, 0.06), CFrame = head.CFrame * CFrame.new(0, -hs.Y * 0.22, -hs.Z / 2 - 0.03), Color = Color3.fromRGB(20, 15, 10) })
+		decorateAbomination(model, costume)
 	end
 end
 

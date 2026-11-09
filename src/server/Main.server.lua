@@ -15,17 +15,19 @@ local Giants = require(Services.Giants)
 local Bots = require(Services.Bots)
 
 Players.CharacterAutoLoads = false
+-- Shift is the sprint key, so turn off Roblox's Shift Lock (it fights over the same key)
+game:GetService("StarterPlayer").EnableMouseLockOption = false
 
 -- Pitch black everywhere; the lobby has its own lights
 Lighting.ClockTime = 0
 Lighting.Brightness = 0
-Lighting.Ambient = Color3.fromRGB(6, 6, 9)
+Lighting.Ambient = Color3.fromRGB(12, 12, 16)
 Lighting.OutdoorAmbient = Color3.fromRGB(0, 0, 0)
 Lighting.EnvironmentDiffuseScale = 0
 Lighting.EnvironmentSpecularScale = 0.15
 Lighting.FogColor = Color3.fromRGB(2, 2, 4)
 Lighting.FogStart = 8
-Lighting.FogEnd = 120
+Lighting.FogEnd = 180
 Lighting.GlobalShadows = true
 
 Facility.buildLobby()
@@ -219,6 +221,7 @@ local function giveFlashlight(character)
 end
 
 local function onPlayerAdded(player)
+	player.DevEnableMouseLock = false
 	local profile = Data.load(player)
 	local stats = Instance.new("Folder")
 	stats.Name = "leaderstats"
@@ -267,7 +270,7 @@ end)
 ---------------------------------------------------------------------------
 -- Input from clients
 ---------------------------------------------------------------------------
-Net.Input.OnServerEvent:Connect(function(player, kind)
+Net.Input.OnServerEvent:Connect(function(player, kind, value)
 	local actor = Giants.ofPlayer(player)
 	if actor and round.phase == "hunt" then
 		if kind == "smash" then
@@ -286,7 +289,8 @@ Net.Input.OnServerEvent:Connect(function(player, kind)
 			local head = player.Character and player.Character:FindFirstChild("Head")
 			local light = head and head:FindFirstChild("Flashlight")
 			if light and not Hiding.isHidden(player) then
-				light.Enabled = not light.Enabled and (battery[player] or 0) > 2
+				local want = if type(value) == "boolean" then value else not light.Enabled
+				light.Enabled = want and (battery[player] or 0) > 2
 			end
 		elseif kind == "leave" then
 			Hiding.leave(player)

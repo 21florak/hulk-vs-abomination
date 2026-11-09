@@ -59,7 +59,7 @@ grade.Parent = Lighting
 local baseAmbient = Lighting.Ambient
 
 local VISION = {
-	civilian = { tint = Color3.fromRGB(200, 210, 230), saturation = -0.45, contrast = 0.15, brightness = -0.02, ambient = Color3.fromRGB(4, 4, 7) },
+	civilian = { tint = Color3.fromRGB(200, 210, 230), saturation = -0.4, contrast = 0.12, brightness = 0.01, ambient = Color3.fromRGB(16, 16, 22) },
 	abomination = { tint = Color3.fromRGB(255, 235, 150), saturation = -0.6, contrast = 0.25, brightness = 0.04, ambient = Color3.fromRGB(28, 26, 18) },
 	hulk = { tint = Color3.fromRGB(215, 255, 205), saturation = -0.3, contrast = 0.15, brightness = 0.02, ambient = Color3.fromRGB(20, 24, 18) },
 }
@@ -248,23 +248,55 @@ end
 local blackout = false
 local failing = false
 local function emergencyLights()
-	local list = {}
+	local list, tubes = {}, {}
 	local facility = Workspace:FindFirstChild("Facility")
 	for _, d in ipairs(facility and facility:GetDescendants() or {}) do
-		if d:IsA("BasePart") and d.Name == "EmergencyLight" then
-			local light = d:FindFirstChildOfClass("PointLight")
+		if d:IsA("BasePart") and (d.Name == "EmergencyLight" or d.Name == "HallLight") then
+			local light = d:FindFirstChildOfClass("Light")
 			if light then
-				table.insert(list, light)
+				table.insert(if d.Name == "HallLight" then tubes else list, light)
 			end
 		end
 	end
-	return list
+	return list, tubes
+end
+
+-- Fluorescent tubes at the hallway ends: mostly on, with bursts of nervous flicker
+local tubeState = {} -- light -> { flickerUntil, nextBurst }
+local function flickerTube(light, now)
+	local state = tubeState[light]
+	if not state then
+		state = { flickerUntil = 0, nextBurst = now + math.random() * 6 }
+		tubeState[light] = state
+	end
+	if now >= state.nextBurst then
+		state.flickerUntil = now + 0.4 + math.random() * 1.4
+		state.nextBurst = now + (if blackout then 1 + math.random() * 3 else 3 + math.random() * 8)
+	end
+	local on
+	if failing then
+		on = math.random() < 0.5
+	elseif now < state.flickerUntil then
+		on = math.random() < 0.45
+	else
+		on = not blackout or math.random() < 0.8
+	end
+	light.Enabled = on
+	if light.Parent then
+		light.Parent.Transparency = if on then 0 else 0.7
+	end
 end
 
 task.spawn(function()
 	while true do
 		task.wait(0.12)
-		local lights = emergencyLights()
+		local lights, tubes = emergencyLights()
+		local now = os.clock()
+		for _, tube in ipairs(tubes) do
+			if tube.Parent and tube.Parent.Material == Enum.Material.Neon then
+				flickerTube(tube, now)
+			end
+		end
 		for _, light in ipairs(lights) do
 			if light.Parent and light.Parent.Material == Enum.Material.Neon then
 				local on

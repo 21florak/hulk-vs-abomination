@@ -28,7 +28,7 @@ The map is built by scripts, so the editor shows an empty world until you press 
 
 **Civilians**: hide in lockers, wardrobes, under desks, in bathroom stalls, crates, walk-in
 fridges, server racks or air vents (E). You peek out through the slats while hidden.
-Sprinting (Shift) makes noise the Abomination can hear, and your flashlight (F) helps you see but
+Sprinting (Shift or Ctrl) makes noise the Abomination can hear, and your flashlight (F) helps you see but
 helps it see you too. If your hiding spot gets smashed, you're thrown out stunned, so run.
 
 **Abomination**: Click/F smash (breaks walls and grabs anyone in reach), Q roar (reveals every

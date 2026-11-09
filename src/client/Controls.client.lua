@@ -1,6 +1,6 @@
 -- Input for every role:
 --   Giants:    Click / F = Smash   ·   Q = Roar (Abomination) / Thunderclap (Hulk)   ·   R = Leap
---   Civilians: Shift = Sprint (makes noise)   ·   F = Flashlight   ·   Space / E = leave a hiding spot
+--   Civilians: Shift (or Ctrl) = Sprint (makes noise)   ·   F = Flashlight   ·   Space / E = leave a hiding spot
 -- Phones get on-screen buttons. Prompts that don't fit your role are hidden.
 local ContextActionService = game:GetService("ContextActionService")
 local Players = game:GetService("Players")
@@ -19,6 +19,7 @@ local hidden = false
 local sprinting = false
 local stamina = Config.Civilian.stamina
 local localCooldowns = {}
+local toggleFlashlight -- defined below
 
 local function role()
 	return player:GetAttribute("Role")
@@ -100,6 +101,26 @@ local function leap()
 	end
 end
 
+-- Flashlight: switch it instantly on your screen, then tell the server (so others see it)
+local battery = Config.Civilian.flashlightBattery
+toggleFlashlight = function()
+	if role() ~= "civilian" or hidden then
+		return
+	end
+	local character = parts()
+	local head = character and character:FindFirstChild("Head")
+	local light = head and head:FindFirstChild("Flashlight")
+	if not light then
+		return
+	end
+	local on = not light.Enabled
+	if on and battery <= 2 then
+		return -- dead battery; it recharges while off
+	end
+	light.Enabled = on
+	Input:FireServer("flashlight", on)
+end
+
 ---------------------------------------------------------------------------
 -- Bindings (rebuilt whenever your role changes)
 ---------------------------------------------------------------------------
@@ -145,14 +166,15 @@ local function applyRole()
 		bind("GiantSpecial", special, if r == "hulk" then "Clap" else "Roar", Enum.KeyCode.Q, Enum.KeyCode.ButtonX)
 		bind("GiantLeap", leap, "Leap", Enum.KeyCode.R, Enum.KeyCode.ButtonY)
 	elseif r == "civilian" then
-		bind("Flashlight", function()
-			Input:FireServer("flashlight")
-		end, "Light", Enum.KeyCode.F, Enum.KeyCode.ButtonY)
+		-- Keyboard F / Shift are read directly below; these give phones and gamepads buttons
+		bind("Flashlight", toggleFlashlight, "Light", Enum.KeyCode.ButtonY)
 		ContextActionService:BindAction("Sprint", function(_, state)
 			sprinting = state == Enum.UserInputState.Begin
-			return Enum.ContextActionResult.Pass
-		end, true, Enum.KeyCode.LeftShift, Enum.KeyCode.ButtonL3)
+			return Enum.ContextActionResult.Sink
+		end, true, Enum.KeyCode.ButtonL3)
 		ContextActionService:SetTitle("Sprint", "Run")
+	else
+		sprinting = false
 	end
 	updatePrompts()
 end
@@ -168,7 +190,20 @@ workspace.ChildAdded:Connect(function(child)
 end)
 
 -- Left click smashes for giants
+local SPRINT_KEYS = { [Enum.KeyCode.LeftShift] = true, [Enum.KeyCode.RightShift] = true, [Enum.KeyCode.LeftControl] = true }
+
 UserInputService.InputBegan:Connect(function(input, processed)
+	if UserInputService:GetFocusedTextBox() then
+		return -- typing in chat
+	end
+	if SPRINT_KEYS[input.KeyCode] then
+		sprinting = true
+		return
+	end
+	if input.KeyCode == Enum.KeyCode.F and role() == "civilian" then
+		toggleFlashlight()
+		return
+	end
 	if processed then
 		return
 	end
@@ -179,6 +214,12 @@ UserInputService.InputBegan:Connect(function(input, processed)
 	end
 end)
 
+UserInputService.InputEnded:Connect(function(input)
+	if SPRINT_KEYS[input.KeyCode] then
+		sprinting = false
+	end
+end)
+
 -- Leaving a hiding spot on phones: tap the jump button
 UserInputService.JumpRequest:Connect(function()
 	if hidden then
@@ -186,8 +227,10 @@ UserInputService.JumpRequest:Connect(function()
 	end
 end)
 
-ToClient.OnClientEvent:Connect(function(kind)
-	if kind == "Hidden" then
+ToClient.OnClientEvent:Connect(function(kind, value)
+	if kind == "Battery" then
+		battery = value
+	elseif kind == "Hidden" then
 		hidden = true
 		updatePrompts()
 	elseif kind == "Unhidden" then

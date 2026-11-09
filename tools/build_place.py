@@ -46,7 +46,7 @@ place = "".join([
     item("Lighting", "Lighting", extra=LIGHTING),
     item("ReplicatedStorage", "ReplicatedStorage", [folder(ROOT / "src/shared", "Shared")]),
     item("ServerScriptService", "ServerScriptService", [folder(ROOT / "src/server", "Server")]),
-    item("StarterPlayer", "StarterPlayer", [
+    item("StarterPlayer", "StarterPlayer", extra='<bool name="EnableMouseLockOption">false</bool>', children=[
         item("StarterPlayerScripts", "StarterPlayerScripts", [folder(ROOT / "src/client", "Client")]),
     ]),
 ])
