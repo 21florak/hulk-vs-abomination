@@ -95,6 +95,10 @@ Config.Facility = {
 	panel = 6, -- breakable wall panel width/height
 	doorWidth = 6,
 	doorHeight = 10, -- people fit through doors; giants have to smash
+	-- flickering hallway tube lights (raise these to make the hallways brighter)
+	hallLightBrightness = 2.2,
+	hallLightRange = 46,
+	hallLightsMiddle = 10, -- extra tubes over random intersections, besides the hallway ends
 }
 
 -- Chaos: rises with every smash and hit. Each threshold triggers something worse.

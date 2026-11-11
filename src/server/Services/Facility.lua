@@ -415,8 +415,8 @@ function Facility.build(seed)
 		part({ Name = "TubeHousing", Size = (if alongX then Vector3.new(7.6, 0.4, 2) else Vector3.new(2, 0.4, 7.6)), Position = position + Vector3.new(0, F.height - 0.2, 0), Color = Color3.fromRGB(60, 60, 62), Material = Enum.Material.Metal, CanCollide = false, Parent = lights })
 		local glow = Instance.new("PointLight")
 		glow.Color = Color3.fromRGB(205, 225, 255)
-		glow.Range = 34
-		glow.Brightness = 1.3
+		glow.Range = F.hallLightRange
+		glow.Brightness = F.hallLightBrightness
 		glow.Shadows = true
 		glow.Parent = t
 		t:SetAttribute("Breakable", true)
@@ -432,7 +432,7 @@ function Facility.build(seed)
 		tube(Vector3.new(WIDTH / 2 - 5, 0, z), true)
 	end
 	-- and over a few intersections in the middle
-	for _ = 1, 6 do
+	for _ = 1, F.hallLightsMiddle do
 		local x = -WIDTH / 2 + F.hall / 2 + rng:NextInteger(1, F.cols - 1) * PITCH
 		local z = -DEPTH / 2 + F.hall / 2 + rng:NextInteger(1, F.rows - 1) * PITCH
 		tube(Vector3.new(x, 0, z), rng:NextNumber() < 0.5)
