@@ -98,6 +98,41 @@ local function spike(model, p, size, offset, rotation, color, material)
 	})
 end
 
+-- Hot breath steaming out of the mouth in slow, heavy puffs
+local function breath(head, color)
+	local mouth = Instance.new("Attachment")
+	mouth.Name = "Mouth"
+	mouth.Position = Vector3.new(0, -head.Size.Y * 0.3, -head.Size.Z * 0.6)
+	mouth.Parent = head
+	local steam = Instance.new("ParticleEmitter")
+	steam.Name = "Breath"
+	steam.Texture = "rbxasset://textures/particles/smoke_main.dds"
+	steam.Color = ColorSequence.new(color)
+	steam.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.55), NumberSequenceKeypoint.new(1, 1) })
+	steam.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.3), NumberSequenceKeypoint.new(1, 1.4) })
+	steam.Lifetime = NumberRange.new(0.8, 1.4)
+	steam.Speed = NumberRange.new(1.5, 3)
+	steam.EmissionDirection = Enum.NormalId.Front
+	steam.SpreadAngle = Vector2.new(20, 20)
+	steam.Rate = 6
+	steam.LightInfluence = 0.6
+	steam.Parent = mouth
+end
+
+-- A thin raised line (vein, scar, fissure) lying on a body part's surface
+local function streak(model, p, from, to, width, color, material)
+	local a = p.CFrame * (p.Size * from)
+	local b = p.CFrame * (p.Size * to)
+	local mid = (a + b) / 2
+	return weldTo(model, p, {
+		Name = "Streak",
+		Size = Vector3.new(width, width, (b - a).Magnitude),
+		CFrame = CFrame.lookAt(mid, b),
+		Color = color,
+		Material = material or Enum.Material.SmoothPlastic,
+	})
+end
+
 local function decorateHulk(model, costume)
 	local get = function(name)
 		return model:FindFirstChild(name)
@@ -174,6 +209,35 @@ local function decorateHulk(model, costume)
 		spike(model, head, Vector3.new(hs.X * 0.2, hs.Y * 0.35, hs.Z * 0.5), Vector3.new(k * 0.2, 0.6, 0.2), CFrame.Angles(math.rad(-20), 0, 0), hair, Enum.Material.Fabric)
 		spike(model, head, Vector3.new(hs.X * 0.22, hs.Y * 0.45, hs.Z * 0.3), Vector3.new(k * 0.2, 0.15, 0.55), CFrame.Angles(math.pi, 0, 0), hair, Enum.Material.Fabric) -- shag at the back
 	end
+
+	-- Raised veins across the arms and neck, battle scars, and shackles torn off the wrists
+	local vein = skin:Lerp(Color3.fromRGB(20, 60, 20), 0.45)
+	local scar = Color3.fromRGB(110, 45, 40)
+	for _, side in ipairs({ "Left", "Right" }) do
+		local upper, fore, hand = get(side .. "UpperArm"), get(side .. "LowerArm"), get(side .. "Hand")
+		if upper then
+			streak(model, upper, Vector3.new(0.1, 0.45, -0.72), Vector3.new(-0.15, -0.4, -0.7), 0.09, vein)
+			streak(model, upper, Vector3.new(-0.1, 0.1, -0.72), Vector3.new(0.3, -0.35, -0.68), 0.07, vein)
+		end
+		if fore then
+			streak(model, fore, Vector3.new(0, 0.45, -0.72), Vector3.new(0.1, -0.5, -0.7), 0.09, vein)
+			streak(model, fore, Vector3.new(0.25, 0.3, -0.7), Vector3.new(-0.2, -0.3, -0.72), 0.06, vein)
+			-- broken iron shackle and two dangling links
+			weldTo(model, fore, { Name = "Shackle", Shape = Enum.PartType.Cylinder, Size = Vector3.new(fore.Size.Y * 0.35, fore.Size.X * 1.65, fore.Size.Z * 1.6), CFrame = fore.CFrame * CFrame.new(0, -fore.Size.Y * 0.35, 0) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(55, 55, 58), Material = Enum.Material.Metal })
+			for k = 1, 2 do
+				weldTo(model, fore, { Name = "ChainLink", Size = Vector3.new(0.12, 0.32, 0.2), CFrame = fore.CFrame * CFrame.new(fore.Size.X * 0.55, -fore.Size.Y * (0.45 + k * 0.18), 0) * CFrame.Angles(0, if k == 1 then 0 else math.rad(90), math.rad(15)), Color = Color3.fromRGB(65, 65, 68), Material = Enum.Material.Metal })
+			end
+		end
+		if hand then
+			-- split knuckles
+			streak(model, hand, Vector3.new(-0.7, -1, -0.9), Vector3.new(0.7, -1, -0.9), 0.08, scar)
+		end
+	end
+	streak(model, torso, Vector3.new(-0.35, 0.35, -0.62), Vector3.new(0.1, -0.15, -0.62), 0.08, scar) -- chest scar
+	streak(model, torso, Vector3.new(0.3, 0.3, -0.62), Vector3.new(0.4, -0.05, -0.62), 0.06, scar)
+	streak(model, torso, Vector3.new(-0.2, 0.55, -0.45), Vector3.new(-0.15, 0.85, -0.3), 0.1, vein) -- neck veins
+	streak(model, torso, Vector3.new(0.2, 0.55, -0.45), Vector3.new(0.15, 0.85, -0.3), 0.1, vein)
+	breath(head, Color3.fromRGB(230, 235, 230))
 
 	if costume.armor then
 		for _, side in ipairs({ -1, 1 }) do
@@ -286,6 +350,42 @@ local function decorateAbomination(model, costume)
 	end
 end
 
+local function abominationExtras(model, costume)
+	local get = function(name)
+		return model:FindFirstChild(name)
+	end
+	local head, torso = get("Head"), get("UpperTorso")
+	local glow = costume.eyes
+	local bone = if costume.glow then costume.spikes else Color3.fromRGB(215, 205, 180):Lerp(costume.spikes, 0.25)
+	local spikeMat = if costume.glow then Enum.Material.Neon else Enum.Material.Slate
+	-- Glowing fissures cracking across the hide
+	streak(model, torso, Vector3.new(-0.4, 0.3, -0.55), Vector3.new(-0.05, -0.1, -0.56), 0.07, glow, Enum.Material.Neon)
+	streak(model, torso, Vector3.new(-0.05, -0.1, -0.56), Vector3.new(0.2, -0.45, -0.55), 0.06, glow, Enum.Material.Neon)
+	streak(model, torso, Vector3.new(0.35, 0.4, -0.55), Vector3.new(0.15, 0.05, -0.56), 0.05, glow, Enum.Material.Neon)
+	for _, side in ipairs({ "Left", "Right" }) do
+		local upper, fore = get(side .. "UpperArm"), get(side .. "LowerArm")
+		if upper then
+			streak(model, upper, Vector3.new(0, 0.4, -0.72), Vector3.new(0.2, -0.3, -0.7), 0.06, glow, Enum.Material.Neon)
+		end
+		if fore then
+			streak(model, fore, Vector3.new(-0.2, 0.4, -0.72), Vector3.new(0.15, -0.35, -0.7), 0.06, glow, Enum.Material.Neon)
+			streak(model, fore, Vector3.new(0.3, 0.1, -0.7), Vector3.new(-0.1, -0.2, -0.72), 0.05, Color3.fromRGB(80, 15, 15)) -- gash
+		end
+	end
+	-- Jagged bone plates over the chest
+	for _, side in ipairs({ -1, 1 }) do
+		weldTo(model, torso, { class = "WedgePart", Name = "ChestPlate", Size = Vector3.new(torso.Size.X * 0.3, torso.Size.Y * 0.35, 0.25), CFrame = torso.CFrame * CFrame.new(side * torso.Size.X * 0.22, torso.Size.Y * 0.3, -torso.Size.Z * 0.62) * CFrame.Angles(0, 0, side * math.rad(20)), Color = bone, Material = spikeMat })
+	end
+	-- A crown of horns sweeping back from the brow
+	local hs = head.Size
+	for k = -2, 2 do
+		if k ~= 0 then
+			weldTo(model, head, { class = "WedgePart", Name = "Horn", Size = Vector3.new(0.18, hs.Y * (0.55 - math.abs(k) * 0.08), hs.Z * 0.45), CFrame = head.CFrame * CFrame.new(k * hs.X * 0.18, hs.Y * 0.55, hs.Z * 0.05) * CFrame.Angles(math.rad(-35), math.rad(k * 8), 0), Color = bone, Material = spikeMat })
+		end
+	end
+	breath(head, Color3.fromRGB(190, 200, 190))
+end
+
 local function decorate(model, role, costume)
 	local head = model:FindFirstChild("Head")
 	local torso = model:FindFirstChild("UpperTorso")
@@ -300,6 +400,7 @@ local function decorate(model, role, costume)
 		decorateHulk(model, costume)
 	else
 		decorateAbomination(model, costume)
+		abominationExtras(model, costume)
 	end
 end
 

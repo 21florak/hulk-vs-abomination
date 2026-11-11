@@ -50,6 +50,34 @@ if sounds.ambience then
 	sounds.ambience:Play()
 end
 
+-- 3D sound at a point in the world: louder the closer you are to it
+local function playAt(name, position, volume, pitch)
+	local template = sounds[name]
+	if not template then
+		return
+	end
+	local anchor = Instance.new("Part")
+	anchor.Anchored = true
+	anchor.CanCollide = false
+	anchor.CanQuery = false
+	anchor.Transparency = 1
+	anchor.Size = Vector3.one
+	anchor.Position = position
+	local sound = template:Clone()
+	sound.Looped = false
+	sound.Volume = volume or 1
+	sound.PlaybackSpeed = pitch or 1
+	sound.RollOffMode = Enum.RollOffMode.InverseTapered
+	sound.RollOffMinDistance = 20
+	sound.RollOffMaxDistance = 320
+	sound.Parent = anchor
+	anchor.Parent = Workspace
+	sound:Play()
+	task.delay(8, function()
+		anchor:Destroy()
+	end)
+end
+
 ---------------------------------------------------------------------------
 -- Role vision
 ---------------------------------------------------------------------------
@@ -327,6 +355,7 @@ task.spawn(function()
 			end
 			task.delay(1.2, function()
 				addShake(0.4) -- thunder
+				play("thunder", 0.7)
 			end)
 		end
 	end
@@ -348,6 +377,37 @@ local function findAbomination()
 	end
 	return nil
 end
+
+-- Giant footsteps: a heavy stomp every stride while a giant is moving, from where it is
+local stepTimers = {}
+local function giants()
+	local list = {}
+	for _, model in ipairs(Workspace:GetChildren()) do
+		if model:IsA("Model") and (model:GetAttribute("Role") == "abomination" or model:GetAttribute("Role") == "hulk") then
+			table.insert(list, model)
+		end
+	end
+	return list
+end
+task.spawn(function()
+	while true do
+		task.wait(0.1)
+		if sounds.stomp then
+			for _, model in ipairs(giants()) do
+				local root = model:FindFirstChild("HumanoidRootPart")
+				if root then
+					local speed = (root.AssemblyLinearVelocity * Vector3.new(1, 0, 1)).Magnitude
+					local next = stepTimers[model] or 0
+					if speed > 4 and os.clock() >= next then
+						stepTimers[model] = os.clock() + math.clamp(9 / speed, 0.35, 0.8)
+						local deep = if model:GetAttribute("Role") == "abomination" then 0.75 else 0.9
+						playAt("stomp", root.Position - Vector3.new(0, 6, 0), 1.1, deep + math.random() * 0.08)
+					end
+				end
+			end
+		end
+	end
+end)
 
 local WHISPERS = { "it's close...", "don't breathe.", "it can hear you.", "stay still...", "it's right there." }
 local nextWhisper = 0
@@ -409,12 +469,15 @@ end)
 ToClient.OnClientEvent:Connect(function(kind, a, b, c)
 	if kind == "Blast" then
 		shakeFrom(a, 0.25 + math.min(c or 0, 10) * 0.05, 90)
-		play("smash", 0.6)
+		if (c or 0) > 0 then
+			playAt("smash", a, 0.6 + math.min(c, 10) * 0.05, 0.9 + math.random() * 0.2)
+		end
 	elseif kind == "Smash" then
 		shakeFrom(b, 0.4, 70)
+		playAt("smash", b, 0.8, 0.85 + math.random() * 0.25)
 	elseif kind == "Roar" then
 		shakeFrom(a, 1.6, 140)
-		play("roar", 1)
+		playAt("roar", a, 1.4, 0.92 + math.random() * 0.12)
 		if role() == "civilian" then
 			screenFlash(Color3.fromRGB(120, 0, 0), 0.35, 1.2)
 		end
@@ -425,10 +488,14 @@ ToClient.OnClientEvent:Connect(function(kind, a, b, c)
 	elseif kind == "Clap" then
 		shakeFrom(a, 2, 120)
 		screenFlash(Color3.new(1, 1, 1), 0.25, 0.5)
+		playAt("smash", a, 1.4, 0.6)
+		playAt("thunder", a, 0.8, 1.6)
 	elseif kind == "Stomp" or kind == "Shatter" then
 		shakeFrom(a, 1, 100)
+		playAt(if kind == "Stomp" then "stomp" else "smash", a, 1.3, if kind == "Stomp" then 0.8 else 1.3)
 	elseif kind == "Collapse" then
 		shakeFrom(a, 1.4, 130)
+		playAt("smash", a, 1.3, 0.7)
 	elseif kind == "ChaosEvent" then
 		if a == "blackout" then
 			blackout = true
@@ -447,6 +514,7 @@ ToClient.OnClientEvent:Connect(function(kind, a, b, c)
 		camera.CameraType = Enum.CameraType.Custom
 	elseif kind == "Exposed" then
 		addShake(2)
+		play("scream", 0.8)
 		screenFlash(Color3.fromRGB(255, 220, 200), 0.6, 0.6)
 	elseif kind == "Caught" then
 		play("scream", 1)

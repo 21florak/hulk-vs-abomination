@@ -73,9 +73,29 @@ White, Toxic glow), Civilian (Office Worker, Scientist, Security Guard, Janitor,
 
 ## Sounds
 
-There are no audio files in the project. Paste asset ids from the Creator Store into
-`Config.Sounds` (ambience drone, heartbeat, roar, smash, alarm, scream) and they play
-automatically.
+The `sounds/` folder has eight original sound effects, synthesized from scratch by
+`tools/make_sounds.py` (no samples, no movie audio), so you own them outright:
+
+| File | Where it plays |
+| --- | --- |
+| `roar.ogg` | Giant roars, heard across the building |
+| `smash.ogg` | Walls, panels and hiding spots breaking; punches; collapses |
+| `stomp.ogg` | Giant footsteps (you hear them coming before you see them) and leap landings |
+| `thunder.ogg` | After each lightning flash, and the Hulk's thunderclap |
+| `heartbeat.ogg` | Loops louder and faster as the Abomination gets close |
+| `ambience.ogg` | Looping drone, vents and groaning metal |
+| `alarm.ogg` | Structure failing |
+| `scream.ogg` | Jump-scare stinger when you're caught or your hiding spot is exposed |
+
+Roblox only plays audio that's uploaded to your account:
+
+1. Download the `.ogg` files from the `sounds/` folder on GitHub.
+2. In the Creator Dashboard go to **Creations → Development Items → Audio** and upload each one.
+3. Copy each asset id and paste it into `Config.Sounds` in `src/shared/Config.lua`
+   (or the `Config` ModuleScript in Studio) as `"rbxassetid://1234567"`.
+
+Empty slots are skipped, so the game runs fine before you upload them. To tweak a sound,
+edit `tools/make_sounds.py` and run `python3 tools/make_sounds.py` (needs numpy and ffmpeg).
 
 ## A note on names
 

@@ -143,15 +143,18 @@ Config.Costumes = {
 	civ_hoodie = { role = "civilian", name = "Black Hoodie", price = 250, shirt = Color3.fromRGB(25, 25, 28), pants = Color3.fromRGB(35, 35, 40) },
 }
 
--- Optional sounds: paste Roblox audio asset ids (e.g. "rbxassetid://1234567") from the Creator
--- Store. Empty strings are skipped, so the game works without them.
+-- Sounds: original effects made by tools/make_sounds.py live in the sounds/ folder.
+-- Upload each .ogg in the Creator Dashboard (Creations → Development Items → Audio), then paste
+-- its id here as "rbxassetid://1234567". Empty strings are skipped, so the game works without them.
 Config.Sounds = {
-	ambience = "", -- looping dark drone
-	heartbeat = "",
-	roar = "",
-	smash = "",
-	alarm = "",
-	scream = "",
+	ambience = "", -- sounds/ambience.ogg  (looping drone, vents, distant metal groans)
+	heartbeat = "", -- sounds/heartbeat.ogg (loops faster as the Abomination gets close)
+	roar = "", -- sounds/roar.ogg
+	smash = "", -- sounds/smash.ogg
+	stomp = "", -- sounds/stomp.ogg     (giant footsteps, heard from far away)
+	alarm = "", -- sounds/alarm.ogg     (structure failing)
+	scream = "", -- sounds/scream.ogg    (jump-scare stinger when you're caught or exposed)
+	thunder = "", -- sounds/thunder.ogg   (after each lightning flash)
 }
 
 return Config
@@ -1961,6 +1964,41 @@ local function spike(model, p, size, offset, rotation, color, material)
 	})
 end
 
+-- Hot breath steaming out of the mouth in slow, heavy puffs
+local function breath(head, color)
+	local mouth = Instance.new("Attachment")
+	mouth.Name = "Mouth"
+	mouth.Position = Vector3.new(0, -head.Size.Y * 0.3, -head.Size.Z * 0.6)
+	mouth.Parent = head
+	local steam = Instance.new("ParticleEmitter")
+	steam.Name = "Breath"
+	steam.Texture = "rbxasset://textures/particles/smoke_main.dds"
+	steam.Color = ColorSequence.new(color)
+	steam.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.55), NumberSequenceKeypoint.new(1, 1) })
+	steam.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.3), NumberSequenceKeypoint.new(1, 1.4) })
+	steam.Lifetime = NumberRange.new(0.8, 1.4)
+	steam.Speed = NumberRange.new(1.5, 3)
+	steam.EmissionDirection = Enum.NormalId.Front
+	steam.SpreadAngle = Vector2.new(20, 20)
+	steam.Rate = 6
+	steam.LightInfluence = 0.6
+	steam.Parent = mouth
+end
+
+-- A thin raised line (vein, scar, fissure) lying on a body part's surface
+local function streak(model, p, from, to, width, color, material)
+	local a = p.CFrame * (p.Size * from)
+	local b = p.CFrame * (p.Size * to)
+	local mid = (a + b) / 2
+	return weldTo(model, p, {
+		Name = "Streak",
+		Size = Vector3.new(width, width, (b - a).Magnitude),
+		CFrame = CFrame.lookAt(mid, b),
+		Color = color,
+		Material = material or Enum.Material.SmoothPlastic,
+	})
+end
+
 local function decorateHulk(model, costume)
 	local get = function(name)
 		return model:FindFirstChild(name)
@@ -2037,6 +2075,35 @@ local function decorateHulk(model, costume)
 		spike(model, head, Vector3.new(hs.X * 0.2, hs.Y * 0.35, hs.Z * 0.5), Vector3.new(k * 0.2, 0.6, 0.2), CFrame.Angles(math.rad(-20), 0, 0), hair, Enum.Material.Fabric)
 		spike(model, head, Vector3.new(hs.X * 0.22, hs.Y * 0.45, hs.Z * 0.3), Vector3.new(k * 0.2, 0.15, 0.55), CFrame.Angles(math.pi, 0, 0), hair, Enum.Material.Fabric) -- shag at the back
 	end
+
+	-- Raised veins across the arms and neck, battle scars, and shackles torn off the wrists
+	local vein = skin:Lerp(Color3.fromRGB(20, 60, 20), 0.45)
+	local scar = Color3.fromRGB(110, 45, 40)
+	for _, side in ipairs({ "Left", "Right" }) do
+		local upper, fore, hand = get(side .. "UpperArm"), get(side .. "LowerArm"), get(side .. "Hand")
+		if upper then
+			streak(model, upper, Vector3.new(0.1, 0.45, -0.72), Vector3.new(-0.15, -0.4, -0.7), 0.09, vein)
+			streak(model, upper, Vector3.new(-0.1, 0.1, -0.72), Vector3.new(0.3, -0.35, -0.68), 0.07, vein)
+		end
+		if fore then
+			streak(model, fore, Vector3.new(0, 0.45, -0.72), Vector3.new(0.1, -0.5, -0.7), 0.09, vein)
+			streak(model, fore, Vector3.new(0.25, 0.3, -0.7), Vector3.new(-0.2, -0.3, -0.72), 0.06, vein)
+			-- broken iron shackle and two dangling links
+			weldTo(model, fore, { Name = "Shackle", Shape = Enum.PartType.Cylinder, Size = Vector3.new(fore.Size.Y * 0.35, fore.Size.X * 1.65, fore.Size.Z * 1.6), CFrame = fore.CFrame * CFrame.new(0, -fore.Size.Y * 0.35, 0) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(55, 55, 58), Material = Enum.Material.Metal })
+			for k = 1, 2 do
+				weldTo(model, fore, { Name = "ChainLink", Size = Vector3.new(0.12, 0.32, 0.2), CFrame = fore.CFrame * CFrame.new(fore.Size.X * 0.55, -fore.Size.Y * (0.45 + k * 0.18), 0) * CFrame.Angles(0, if k == 1 then 0 else math.rad(90), math.rad(15)), Color = Color3.fromRGB(65, 65, 68), Material = Enum.Material.Metal })
+			end
+		end
+		if hand then
+			-- split knuckles
+			streak(model, hand, Vector3.new(-0.7, -1, -0.9), Vector3.new(0.7, -1, -0.9), 0.08, scar)
+		end
+	end
+	streak(model, torso, Vector3.new(-0.35, 0.35, -0.62), Vector3.new(0.1, -0.15, -0.62), 0.08, scar) -- chest scar
+	streak(model, torso, Vector3.new(0.3, 0.3, -0.62), Vector3.new(0.4, -0.05, -0.62), 0.06, scar)
+	streak(model, torso, Vector3.new(-0.2, 0.55, -0.45), Vector3.new(-0.15, 0.85, -0.3), 0.1, vein) -- neck veins
+	streak(model, torso, Vector3.new(0.2, 0.55, -0.45), Vector3.new(0.15, 0.85, -0.3), 0.1, vein)
+	breath(head, Color3.fromRGB(230, 235, 230))
 
 	if costume.armor then
 		for _, side in ipairs({ -1, 1 }) do
@@ -2149,6 +2216,42 @@ local function decorateAbomination(model, costume)
 	end
 end
 
+local function abominationExtras(model, costume)
+	local get = function(name)
+		return model:FindFirstChild(name)
+	end
+	local head, torso = get("Head"), get("UpperTorso")
+	local glow = costume.eyes
+	local bone = if costume.glow then costume.spikes else Color3.fromRGB(215, 205, 180):Lerp(costume.spikes, 0.25)
+	local spikeMat = if costume.glow then Enum.Material.Neon else Enum.Material.Slate
+	-- Glowing fissures cracking across the hide
+	streak(model, torso, Vector3.new(-0.4, 0.3, -0.55), Vector3.new(-0.05, -0.1, -0.56), 0.07, glow, Enum.Material.Neon)
+	streak(model, torso, Vector3.new(-0.05, -0.1, -0.56), Vector3.new(0.2, -0.45, -0.55), 0.06, glow, Enum.Material.Neon)
+	streak(model, torso, Vector3.new(0.35, 0.4, -0.55), Vector3.new(0.15, 0.05, -0.56), 0.05, glow, Enum.Material.Neon)
+	for _, side in ipairs({ "Left", "Right" }) do
+		local upper, fore = get(side .. "UpperArm"), get(side .. "LowerArm")
+		if upper then
+			streak(model, upper, Vector3.new(0, 0.4, -0.72), Vector3.new(0.2, -0.3, -0.7), 0.06, glow, Enum.Material.Neon)
+		end
+		if fore then
+			streak(model, fore, Vector3.new(-0.2, 0.4, -0.72), Vector3.new(0.15, -0.35, -0.7), 0.06, glow, Enum.Material.Neon)
+			streak(model, fore, Vector3.new(0.3, 0.1, -0.7), Vector3.new(-0.1, -0.2, -0.72), 0.05, Color3.fromRGB(80, 15, 15)) -- gash
+		end
+	end
+	-- Jagged bone plates over the chest
+	for _, side in ipairs({ -1, 1 }) do
+		weldTo(model, torso, { class = "WedgePart", Name = "ChestPlate", Size = Vector3.new(torso.Size.X * 0.3, torso.Size.Y * 0.35, 0.25), CFrame = torso.CFrame * CFrame.new(side * torso.Size.X * 0.22, torso.Size.Y * 0.3, -torso.Size.Z * 0.62) * CFrame.Angles(0, 0, side * math.rad(20)), Color = bone, Material = spikeMat })
+	end
+	-- A crown of horns sweeping back from the brow
+	local hs = head.Size
+	for k = -2, 2 do
+		if k ~= 0 then
+			weldTo(model, head, { class = "WedgePart", Name = "Horn", Size = Vector3.new(0.18, hs.Y * (0.55 - math.abs(k) * 0.08), hs.Z * 0.45), CFrame = head.CFrame * CFrame.new(k * hs.X * 0.18, hs.Y * 0.55, hs.Z * 0.05) * CFrame.Angles(math.rad(-35), math.rad(k * 8), 0), Color = bone, Material = spikeMat })
+		end
+	end
+	breath(head, Color3.fromRGB(190, 200, 190))
+end
+
 local function decorate(model, role, costume)
 	local head = model:FindFirstChild("Head")
 	local torso = model:FindFirstChild("UpperTorso")
@@ -2163,6 +2266,7 @@ local function decorate(model, role, costume)
 		decorateHulk(model, costume)
 	else
 		decorateAbomination(model, costume)
+		abominationExtras(model, costume)
 	end
 end
 
@@ -2991,6 +3095,34 @@ if sounds.ambience then
 	sounds.ambience:Play()
 end
 
+-- 3D sound at a point in the world: louder the closer you are to it
+local function playAt(name, position, volume, pitch)
+	local template = sounds[name]
+	if not template then
+		return
+	end
+	local anchor = Instance.new("Part")
+	anchor.Anchored = true
+	anchor.CanCollide = false
+	anchor.CanQuery = false
+	anchor.Transparency = 1
+	anchor.Size = Vector3.one
+	anchor.Position = position
+	local sound = template:Clone()
+	sound.Looped = false
+	sound.Volume = volume or 1
+	sound.PlaybackSpeed = pitch or 1
+	sound.RollOffMode = Enum.RollOffMode.InverseTapered
+	sound.RollOffMinDistance = 20
+	sound.RollOffMaxDistance = 320
+	sound.Parent = anchor
+	anchor.Parent = Workspace
+	sound:Play()
+	task.delay(8, function()
+		anchor:Destroy()
+	end)
+end
+
 ---------------------------------------------------------------------------
 -- Role vision
 ---------------------------------------------------------------------------
@@ -3268,6 +3400,7 @@ task.spawn(function()
 			end
 			task.delay(1.2, function()
 				addShake(0.4) -- thunder
+				play("thunder", 0.7)
 			end)
 		end
 	end
@@ -3289,6 +3422,37 @@ local function findAbomination()
 	end
 	return nil
 end
+
+-- Giant footsteps: a heavy stomp every stride while a giant is moving, from where it is
+local stepTimers = {}
+local function giants()
+	local list = {}
+	for _, model in ipairs(Workspace:GetChildren()) do
+		if model:IsA("Model") and (model:GetAttribute("Role") == "abomination" or model:GetAttribute("Role") == "hulk") then
+			table.insert(list, model)
+		end
+	end
+	return list
+end
+task.spawn(function()
+	while true do
+		task.wait(0.1)
+		if sounds.stomp then
+			for _, model in ipairs(giants()) do
+				local root = model:FindFirstChild("HumanoidRootPart")
+				if root then
+					local speed = (root.AssemblyLinearVelocity * Vector3.new(1, 0, 1)).Magnitude
+					local next = stepTimers[model] or 0
+					if speed > 4 and os.clock() >= next then
+						stepTimers[model] = os.clock() + math.clamp(9 / speed, 0.35, 0.8)
+						local deep = if model:GetAttribute("Role") == "abomination" then 0.75 else 0.9
+						playAt("stomp", root.Position - Vector3.new(0, 6, 0), 1.1, deep + math.random() * 0.08)
+					end
+				end
+			end
+		end
+	end
+end)
 
 local WHISPERS = { "it's close...", "don't breathe.", "it can hear you.", "stay still...", "it's right there." }
 local nextWhisper = 0
@@ -3350,12 +3514,15 @@ end)
 ToClient.OnClientEvent:Connect(function(kind, a, b, c)
 	if kind == "Blast" then
 		shakeFrom(a, 0.25 + math.min(c or 0, 10) * 0.05, 90)
-		play("smash", 0.6)
+		if (c or 0) > 0 then
+			playAt("smash", a, 0.6 + math.min(c, 10) * 0.05, 0.9 + math.random() * 0.2)
+		end
 	elseif kind == "Smash" then
 		shakeFrom(b, 0.4, 70)
+		playAt("smash", b, 0.8, 0.85 + math.random() * 0.25)
 	elseif kind == "Roar" then
 		shakeFrom(a, 1.6, 140)
-		play("roar", 1)
+		playAt("roar", a, 1.4, 0.92 + math.random() * 0.12)
 		if role() == "civilian" then
 			screenFlash(Color3.fromRGB(120, 0, 0), 0.35, 1.2)
 		end
@@ -3366,10 +3533,14 @@ ToClient.OnClientEvent:Connect(function(kind, a, b, c)
 	elseif kind == "Clap" then
 		shakeFrom(a, 2, 120)
 		screenFlash(Color3.new(1, 1, 1), 0.25, 0.5)
+		playAt("smash", a, 1.4, 0.6)
+		playAt("thunder", a, 0.8, 1.6)
 	elseif kind == "Stomp" or kind == "Shatter" then
 		shakeFrom(a, 1, 100)
+		playAt(if kind == "Stomp" then "stomp" else "smash", a, 1.3, if kind == "Stomp" then 0.8 else 1.3)
 	elseif kind == "Collapse" then
 		shakeFrom(a, 1.4, 130)
+		playAt("smash", a, 1.3, 0.7)
 	elseif kind == "ChaosEvent" then
 		if a == "blackout" then
 			blackout = true
@@ -3388,6 +3559,7 @@ ToClient.OnClientEvent:Connect(function(kind, a, b, c)
 		camera.CameraType = Enum.CameraType.Custom
 	elseif kind == "Exposed" then
 		addShake(2)
+		play("scream", 0.8)
 		screenFlash(Color3.fromRGB(255, 220, 200), 0.6, 0.6)
 	elseif kind == "Caught" then
 		play("scream", 1)

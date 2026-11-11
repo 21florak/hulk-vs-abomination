@@ -143,15 +143,18 @@ Config.Costumes = {
 	civ_hoodie = { role = "civilian", name = "Black Hoodie", price = 250, shirt = Color3.fromRGB(25, 25, 28), pants = Color3.fromRGB(35, 35, 40) },
 }
 
--- Optional sounds: paste Roblox audio asset ids (e.g. "rbxassetid://1234567") from the Creator
--- Store. Empty strings are skipped, so the game works without them.
+-- Sounds: original effects made by tools/make_sounds.py live in the sounds/ folder.
+-- Upload each .ogg in the Creator Dashboard (Creations → Development Items → Audio), then paste
+-- its id here as "rbxassetid://1234567". Empty strings are skipped, so the game works without them.
 Config.Sounds = {
-	ambience = "", -- looping dark drone
-	heartbeat = "",
-	roar = "",
-	smash = "",
-	alarm = "",
-	scream = "",
+	ambience = "", -- sounds/ambience.ogg  (looping drone, vents, distant metal groans)
+	heartbeat = "", -- sounds/heartbeat.ogg (loops faster as the Abomination gets close)
+	roar = "", -- sounds/roar.ogg
+	smash = "", -- sounds/smash.ogg
+	stomp = "", -- sounds/stomp.ogg     (giant footsteps, heard from far away)
+	alarm = "", -- sounds/alarm.ogg     (structure failing)
+	scream = "", -- sounds/scream.ogg    (jump-scare stinger when you're caught or exposed)
+	thunder = "", -- sounds/thunder.ogg   (after each lightning flash)
 }
 
 return Config
