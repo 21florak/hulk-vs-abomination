@@ -2421,13 +2421,35 @@ local function findBody(role)
 	if found:IsDescendantOf(Workspace) then
 		found.Parent = game:GetService("ServerStorage") -- keep the spare copy out of the map
 	end
-	local meshes = {}
+	-- The importer may rename pieces (e.g. "HulkBody_LeftHand" or "LeftHand.001"): match each
+	-- MeshPart to the longest known piece name it contains
+	local meta = BodyMeshes[META_KEYS[role]]
+	local meshes, count, total = {}, 0, 0
 	for _, d in ipairs(found:GetDescendants()) do
 		if d:IsA("MeshPart") then
-			meshes[d.Name] = d
+			total += 1
+			local best
+			for key in pairs(meta) do
+				if string.find(d.Name, key, 1, true) and (not best or #key > #best) then
+					best = key
+				end
+			end
+			if best and not meshes[best] then
+				meshes[best] = d
+				count += 1
+			end
 		end
 	end
-	local meta = BodyMeshes[META_KEYS[role]]
+	print(string.format("[Lockdown] %s: found %d mesh pieces, matched %d of %d body pieces", name, total, count, #(function()
+		local list = {}
+		for k in pairs(meta) do
+			table.insert(list, k)
+		end
+		return list
+	end)()))
+	if total <= 1 then
+		warn("[Lockdown] " .. name .. " was imported as a single merged mesh. Re-import it with the meshes kept separate (untick any 'merge meshes' option).")
+	end
 	local lt, head, lh, rh = meshes.LowerTorso, meshes.Head, meshes.LeftHand, meshes.RightHand
 	if not (lt and head and lh and rh) then
 		warn("[Lockdown] " .. name .. " is missing body parts; using the built-in look")
@@ -2470,6 +2492,35 @@ local function layerLook(role, costume, partName, layer)
 	return costume.skin, Enum.Material.SmoothPlastic
 end
 
+-- The rig's rest pose, measured from its joints (so animation doesn't matter): part -> CFrame
+local function restLayout(model)
+	local lower = model:FindFirstChild("LowerTorso")
+	if not lower then
+		return nil
+	end
+	local rest = { [lower] = CFrame.identity }
+	local motors = {}
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("Motor6D") and d.Part0 and d.Part1 then
+			table.insert(motors, d)
+		end
+	end
+	local progress = true
+	while progress do
+		progress = false
+		for _, m in ipairs(motors) do
+			if rest[m.Part0] and not rest[m.Part1] then
+				rest[m.Part1] = rest[m.Part0] * m.C0 * m.C1:Inverse()
+				progress = true
+			elseif rest[m.Part1] and not rest[m.Part0] then
+				rest[m.Part0] = rest[m.Part1] * m.C1 * m.C0:Inverse()
+				progress = true
+			end
+		end
+	end
+	return rest
+end
+
 -- Returns true if the sculpted body was applied
 local function applyBody(model, role, costume)
 	local body = findBody(role)
@@ -2477,14 +2528,64 @@ local function applyBody(model, role, costume)
 		return false
 	end
 	local ref = BodyMeshes.ref
+	local rest = restLayout(model)
+	if not rest then
+		return false
+	end
+	-- Fit the reference layout to this rig: a separate scale and shift per axis (least squares over
+	-- the 15 body part centers), so the whole sculpture stretches evenly instead of part by part
+	local refs, acts = {}, {}
+	for name, r in pairs(ref) do
+		local part = model:FindFirstChild(name)
+		if part and rest[part] then
+			table.insert(refs, r.center)
+			table.insert(acts, rest[part].Position)
+		end
+	end
+	if #refs < 10 then
+		return false
+	end
+	local function fitAxis(get)
+		local n, mr, ma = #refs, 0, 0
+		for i = 1, n do
+			mr += get(refs[i]) / n
+			ma += get(acts[i]) / n
+		end
+		local cov, var = 0, 0
+		for i = 1, n do
+			cov += (get(refs[i]) - mr) * (get(acts[i]) - ma)
+			var += (get(refs[i]) - mr) ^ 2
+		end
+		if var < 1e-4 then
+			return nil, ma
+		end
+		local a = cov / var
+		return a, ma - a * mr
+	end
+	local ax, bx = fitAxis(function(v)
+		return v.X
+	end)
+	local ay, by = fitAxis(function(v)
+		return v.Y
+	end)
+	local az, bz = fitAxis(function(v)
+		return v.Z
+	end)
+	ax = ax or 1
+	ay = ay or 1
+	az = az or ax -- the reference rig is flat in Z, so depth scales like width
+	local scale = Vector3.new(ax, ay, az)
+	local function place(c)
+		return Vector3.new(ax * c.X + bx, ay * c.Y + by, az * c.Z + bz)
+	end
+
 	local rot = body.unrotate
+	local applied = 0
 	for meshName, source in pairs(body.meshes) do
 		local partName, layer = string.match(meshName, "^(%w+)_?(%w*)$")
 		local part = partName and model:FindFirstChild(partName)
 		local m = body.meta[meshName]
-		local r = ref[partName or ""]
-		if part and part:IsA("BasePart") and m and r then
-			local ratio = part.Size / r.size
+		if part and part:IsA("BasePart") and rest[part] and m then
 			local mesh = source:Clone()
 			for _, child in ipairs(mesh:GetChildren()) do
 				if not child:IsA("SurfaceAppearance") then
@@ -2498,21 +2599,24 @@ local function applyBody(model, role, costume)
 			mesh.CanTouch = false
 			mesh.Massless = true
 			mesh.CastShadow = true
+			mesh.Transparency = 0
 			mesh.Color, mesh.Material = layerLook(role, costume, partName, layer)
 			-- orientation that undoes the importer's rotation; size along the mesh's own axes
 			local orient = rot * source.CFrame.Rotation
-			local target = m.size * ratio
+			local target = m.size * scale
 			local function along(axis)
 				local v = orient:VectorToWorldSpace(axis)
 				return math.abs(v.X) * target.X + math.abs(v.Y) * target.Y + math.abs(v.Z) * target.Z
 			end
 			mesh.Size = Vector3.new(along(Vector3.xAxis), along(Vector3.yAxis), along(Vector3.zAxis))
-			mesh.CFrame = part.CFrame * CFrame.new((m.center - r.center) * ratio) * orient
+			-- where the piece sits on the rig at rest, carried onto the part wherever it is now
+			mesh.CFrame = part.CFrame * rest[part]:Inverse() * CFrame.new(place(m.center)) * orient
 			local weld = Instance.new("WeldConstraint")
 			weld.Part0 = part
 			weld.Part1 = mesh
 			weld.Parent = mesh
 			mesh.Parent = model
+			applied += 1
 			if layer == "Eyes" then
 				local glow = Instance.new("PointLight")
 				glow.Color = mesh.Color
@@ -2522,12 +2626,22 @@ local function applyBody(model, role, costume)
 			end
 		end
 	end
+	if applied < 10 then
+		warn("[Lockdown] Only " .. applied .. " body pieces fit; using the built-in look")
+		for _, d in ipairs(model:GetChildren()) do
+			if d:IsA("MeshPart") and string.sub(d.Name, 1, 5) == "Body_" then
+				d:Destroy()
+			end
+		end
+		return false
+	end
 	for name in pairs(ref) do
 		local part = model:FindFirstChild(name)
 		if part and part:IsA("BasePart") then
 			part.Transparency = 1
 		end
 	end
+	print(string.format("[Lockdown] Sculpted %s body applied (%d pieces, scale %.2f x %.2f)", role, applied, ax, ay))
 	return true
 end
 
@@ -2559,6 +2673,70 @@ end
 ---------------------------------------------------------------------------
 -- Actors
 ---------------------------------------------------------------------------
+---------------------------------------------------------------------------
+-- Animations. Players' characters animate themselves; AI bots don't (Roblox's Animate script only
+-- runs for players), so the server drives theirs. Every giant gets a punch on smash.
+---------------------------------------------------------------------------
+local ANIM = {
+	idle = "rbxassetid://507766388",
+	walk = "rbxassetid://507777826",
+	run = "rbxassetid://507767714",
+	jump = "rbxassetid://507765000",
+	fall = "rbxassetid://507767968",
+	punch = "rbxassetid://522635514",
+}
+
+local function loadTracks(humanoid, names)
+	local animator = humanoid:FindFirstChildOfClass("Animator")
+	if not animator then
+		animator = Instance.new("Animator")
+		animator.Parent = humanoid
+	end
+	local tracks = {}
+	for _, name in ipairs(names) do
+		local anim = Instance.new("Animation")
+		anim.AnimationId = ANIM[name]
+		local ok, track = pcall(animator.LoadAnimation, animator, anim)
+		if ok and track then
+			track.Priority = if name == "punch" then Enum.AnimationPriority.Action else Enum.AnimationPriority.Core
+			track.Looped = name ~= "punch" and name ~= "jump"
+			tracks[name] = track
+		end
+	end
+	return tracks
+end
+
+local function animateBot(actor, now)
+	local tracks = actor.tracks
+	if not tracks then
+		return
+	end
+	local speed = flat(actor.root.AssemblyLinearVelocity).Magnitude
+	local state = actor.humanoid:GetState()
+	local want = "idle"
+	if state == Enum.HumanoidStateType.Freefall or state == Enum.HumanoidStateType.Jumping then
+		want = if actor.root.AssemblyLinearVelocity.Y > 0 then "jump" else "fall"
+	elseif speed > 1.5 then
+		want = if speed > 14 then "run" else "walk"
+	end
+	if want ~= actor.anim then
+		local old = actor.anim and tracks[actor.anim]
+		if old then
+			old:Stop(0.2)
+		end
+		local track = tracks[want]
+		if track then
+			track:Play(0.2)
+		end
+		actor.anim = want
+	end
+	local track = tracks[want]
+	if track and (want == "run" or want == "walk") then
+		-- giants take long strides, so their legs cycle slower than a normal-size character's
+		track:AdjustSpeed(math.clamp(speed / (16 * Config.GiantScale) * 1.4, 0.4, 2))
+	end
+end
+
 local function register(model, role, player)
 	local humanoid = model:FindFirstChildOfClass("Humanoid")
 	local cfg = cfgFor(role)
@@ -2581,6 +2759,17 @@ local function register(model, role, player)
 	model:SetAttribute("HP", actor.hp)
 	model:SetAttribute("MaxHP", actor.maxHp)
 	Giants.actors[model] = actor
+	if player then
+		actor.tracks = nil
+		actor.punch = loadTracks(humanoid, { "punch" }).punch
+	else
+		local animate = model:FindFirstChild("Animate")
+		if animate then
+			animate:Destroy() -- a LocalScript can't run on a server-owned bot anyway
+		end
+		actor.tracks = loadTracks(humanoid, { "idle", "walk", "run", "jump", "fall", "punch" })
+		actor.punch = actor.tracks.punch
+	end
 	Giants.byRole[role] = actor
 	humanoid.MaxHealth = 1e6
 	humanoid.Health = 1e6
@@ -2760,6 +2949,9 @@ function Giants.smash(actor)
 	end
 	local look = flat(actor.root.CFrame.LookVector)
 	local point = actor.root.Position + look * cfg.smashRange * 0.55
+	if actor.punch then
+		actor.punch:Play(0.05, 1, 1.6)
+	end
 	Net.all("Smash", actor.role, point)
 
 	local opponent = Giants.byRole[if actor.role == "hulk" then "abomination" else "hulk"]
@@ -2852,6 +3044,9 @@ function Giants.update()
 				speed = 0
 			end
 			actor.humanoid.WalkSpeed = speed
+			if actor.bot then
+				animateBot(actor, now)
+			end
 			if now < actor.flyUntil and now >= actor.nextFlyBlast then
 				actor.nextFlyBlast = now + 0.1
 				Destruction.blast(actor.root.Position, 8, { fight = true })
