@@ -94,6 +94,29 @@ end
 
 -- point: world position, radius: studs. opts.fight = true when it came from giants fighting
 -- (cracks hiding spots further out). Returns how many pieces broke.
+-- Is there anything breakable within `radius` of `point`? (cheap check before a blast)
+function Destruction.anyBreakable(point, radius)
+	local _, folders = facilityFolders()
+	local include = {}
+	for _, f in ipairs(folders or {}) do
+		if f then
+			table.insert(include, f)
+		end
+	end
+	if #include == 0 then
+		return false
+	end
+	local params = OverlapParams.new()
+	params.FilterType = Enum.RaycastFilterType.Include
+	params.FilterDescendantsInstances = include
+	for _, p in ipairs(Workspace:GetPartBoundsInRadius(point, radius, params)) do
+		if p.Anchored and p:GetAttribute("Breakable") then
+			return true
+		end
+	end
+	return false
+end
+
 function Destruction.blast(point, radius, opts)
 	opts = opts or {}
 	local root, folders = facilityFolders()

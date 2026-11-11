@@ -26,22 +26,28 @@ Config.Bots = {
 ---------------------------------------------------------------------------
 -- Giants
 ---------------------------------------------------------------------------
-Config.GiantScale = 3 -- characters are scaled up this much (about 15 studs tall)
+Config.GiantScale = 2 -- characters are scaled up this much (about 10 studs tall: twice a civilian, too tall for doors)
+
+-- Giants plow through walls, doors and furniture just by running into them
+Config.Rampage = {
+	reach = 5, -- how far ahead of the giant's center it checks
+	radius = 6, -- how much it tears out each time
+}
 
 Config.Abomination = {
 	hp = 3000,
-	walkSpeed = 22,
-	rageSpeed = 28, -- once chaos is high
+	walkSpeed = 27,
+	rageSpeed = 33, -- once chaos is high
 	smashDamage = 160,
-	smashRange = 15,
-	smashCooldown = 1.0,
-	catchRange = 9, -- grabs any civilian (not hidden) this close
+	smashRange = 11,
+	smashCooldown = 0.6,
+	catchRange = 7, -- grabs any civilian (not hidden) this close
 	roarCooldown = 25,
 	roarRadius = 70, -- civilians in range are revealed to the Abomination for a moment
 	roarReveal = 2.5,
-	leapCooldown = 6,
+	leapCooldown = 3,
 	searchTime = 1.2, -- hold time to search a hiding spot
-	searchRange = 18,
+	searchRange = 14,
 	koSeconds = 18, -- knocked out this long when Hulk drops his HP to 0
 	koRecoverHp = 0.5,
 	noiseRadius = 90, -- hears civilians sprinting within this range
@@ -49,22 +55,22 @@ Config.Abomination = {
 
 Config.Hulk = {
 	hp = 2600,
-	walkSpeed = 24,
+	walkSpeed = 30,
 	smashDamage = 230,
-	smashRange = 15,
-	smashCooldown = 0.9,
+	smashRange = 11,
+	smashCooldown = 0.55,
 	clapCooldown = 16,
-	clapRadius = 32,
+	clapRadius = 28,
 	clapStun = 3,
 	clapDamage = 120,
-	leapCooldown = 5,
+	leapCooldown = 3,
 }
 
 Config.Knockback = 140 -- how hard a giant gets launched by a hit (they crash through walls)
 
 Config.Civilian = {
 	walkSpeed = 13,
-	sprintSpeed = 21,
+	sprintSpeed = 23,
 	stamina = 100,
 	sprintDrain = 22, -- per second
 	staminaRegen = 14,
@@ -1161,6 +1167,29 @@ end
 
 -- point: world position, radius: studs. opts.fight = true when it came from giants fighting
 -- (cracks hiding spots further out). Returns how many pieces broke.
+-- Is there anything breakable within `radius` of `point`? (cheap check before a blast)
+function Destruction.anyBreakable(point, radius)
+	local _, folders = facilityFolders()
+	local include = {}
+	for _, f in ipairs(folders or {}) do
+		if f then
+			table.insert(include, f)
+		end
+	end
+	if #include == 0 then
+		return false
+	end
+	local params = OverlapParams.new()
+	params.FilterType = Enum.RaycastFilterType.Include
+	params.FilterDescendantsInstances = include
+	for _, p in ipairs(Workspace:GetPartBoundsInRadius(point, radius, params)) do
+		if p.Anchored and p:GetAttribute("Breakable") then
+			return true
+		end
+	end
+	return false
+end
+
 function Destruction.blast(point, radius, opts)
 	opts = opts or {}
 	local root, folders = facilityFolders()
@@ -2565,6 +2594,16 @@ function Giants.update()
 			if now < actor.flyUntil and now >= actor.nextFlyBlast then
 				actor.nextFlyBlast = now + 0.1
 				Destruction.blast(actor.root.Position, 8, { fight = true })
+			elseif speed > 0 and now >= (actor.nextRam or 0) then
+				-- Rampage: running into a wall, door or anything breakable plows straight through it
+				local velocity = flat(actor.root.AssemblyLinearVelocity)
+				if velocity.Magnitude > 8 then
+					actor.nextRam = now + 0.15
+					local ahead = actor.root.Position + velocity.Unit * Config.Rampage.reach
+					if Destruction.anyBreakable(ahead, Config.Rampage.radius) then
+						Destruction.blast(ahead, Config.Rampage.radius, { fight = false })
+					end
+				end
 			end
 		end
 	end

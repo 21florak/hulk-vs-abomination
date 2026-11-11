@@ -699,6 +699,16 @@ function Giants.update()
 			if now < actor.flyUntil and now >= actor.nextFlyBlast then
 				actor.nextFlyBlast = now + 0.1
 				Destruction.blast(actor.root.Position, 8, { fight = true })
+			elseif speed > 0 and now >= (actor.nextRam or 0) then
+				-- Rampage: running into a wall, door or anything breakable plows straight through it
+				local velocity = flat(actor.root.AssemblyLinearVelocity)
+				if velocity.Magnitude > 8 then
+					actor.nextRam = now + 0.15
+					local ahead = actor.root.Position + velocity.Unit * Config.Rampage.reach
+					if Destruction.anyBreakable(ahead, Config.Rampage.radius) then
+						Destruction.blast(ahead, Config.Rampage.radius, { fight = false })
+					end
+				end
 			end
 		end
 	end

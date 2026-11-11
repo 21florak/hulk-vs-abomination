@@ -26,22 +26,28 @@ Config.Bots = {
 ---------------------------------------------------------------------------
 -- Giants
 ---------------------------------------------------------------------------
-Config.GiantScale = 3 -- characters are scaled up this much (about 15 studs tall)
+Config.GiantScale = 2 -- characters are scaled up this much (about 10 studs tall: twice a civilian, too tall for doors)
+
+-- Giants plow through walls, doors and furniture just by running into them
+Config.Rampage = {
+	reach = 5, -- how far ahead of the giant's center it checks
+	radius = 6, -- how much it tears out each time
+}
 
 Config.Abomination = {
 	hp = 3000,
-	walkSpeed = 22,
-	rageSpeed = 28, -- once chaos is high
+	walkSpeed = 27,
+	rageSpeed = 33, -- once chaos is high
 	smashDamage = 160,
-	smashRange = 15,
-	smashCooldown = 1.0,
-	catchRange = 9, -- grabs any civilian (not hidden) this close
+	smashRange = 11,
+	smashCooldown = 0.6,
+	catchRange = 7, -- grabs any civilian (not hidden) this close
 	roarCooldown = 25,
 	roarRadius = 70, -- civilians in range are revealed to the Abomination for a moment
 	roarReveal = 2.5,
-	leapCooldown = 6,
+	leapCooldown = 3,
 	searchTime = 1.2, -- hold time to search a hiding spot
-	searchRange = 18,
+	searchRange = 14,
 	koSeconds = 18, -- knocked out this long when Hulk drops his HP to 0
 	koRecoverHp = 0.5,
 	noiseRadius = 90, -- hears civilians sprinting within this range
@@ -49,22 +55,22 @@ Config.Abomination = {
 
 Config.Hulk = {
 	hp = 2600,
-	walkSpeed = 24,
+	walkSpeed = 30,
 	smashDamage = 230,
-	smashRange = 15,
-	smashCooldown = 0.9,
+	smashRange = 11,
+	smashCooldown = 0.55,
 	clapCooldown = 16,
-	clapRadius = 32,
+	clapRadius = 28,
 	clapStun = 3,
 	clapDamage = 120,
-	leapCooldown = 5,
+	leapCooldown = 3,
 }
 
 Config.Knockback = 140 -- how hard a giant gets launched by a hit (they crash through walls)
 
 Config.Civilian = {
 	walkSpeed = 13,
-	sprintSpeed = 21,
+	sprintSpeed = 23,
 	stamina = 100,
 	sprintDrain = 22, -- per second
 	staminaRegen = 14,

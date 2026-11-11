@@ -31,6 +31,10 @@ fridges, server racks or air vents (E). You peek out through the slats while hid
 Sprinting (Shift or Ctrl) makes noise the Abomination can hear, and your flashlight (F) helps you see but
 helps it see you too. If your hiding spot gets smashed, you're thrown out stunned, so run.
 
+**Giants** stand about twice as tall as a civilian (`Config.GiantScale`), too big for doors, and
+move fast. They don't need doors: running into a wall, door, locker or desk plows straight
+through it (`Config.Rampage`).
+
 **Abomination**: Click/F smash (breaks walls and grabs anyone in reach), Q roar (reveals every
 civilian nearby, even hidden ones, as heartbeats), R leap, and hold E on a hiding spot to search it.
 Footstep ripples show you where people are sprinting. If the Hulk knocks you out, you're down for
