@@ -8,6 +8,7 @@ local Workspace = game:GetService("Workspace")
 local Config = require(ReplicatedStorage.Shared.Config)
 local Net = require(script.Parent.Net)
 local Destruction = require(script.Parent.Destruction)
+local BodyMeshes = require(script.Parent.BodyMeshes)
 
 local Giants = {}
 Giants.actors = {} -- model -> actor
@@ -419,6 +420,143 @@ local function abominationExtras(model, costume)
 	breath(head, Color3.fromRGB(190, 200, 190))
 end
 
+---------------------------------------------------------------------------
+-- Sculpted bodies: models/HulkBody.obj and models/AbominationBody.obj, imported into Studio.
+-- Each mesh is welded over its R15 body part (which is then hidden), so the body still animates.
+---------------------------------------------------------------------------
+local BODY_NAMES = { hulk = "HulkBody", abomination = "AbominationBody" }
+local META_KEYS = { hulk = "Hulk", abomination = "Abomination" }
+local bodyCache = {}
+
+local function findBody(role)
+	local cached = bodyCache[role]
+	if cached and cached.model.Parent then
+		return cached
+	end
+	local name = BODY_NAMES[role]
+	local found
+	for _, container in ipairs({ game:GetService("ServerStorage"), ReplicatedStorage, Workspace }) do
+		found = container:FindFirstChild(name, true)
+		if found then
+			break
+		end
+	end
+	if not found then
+		return nil
+	end
+	if found:IsDescendantOf(Workspace) then
+		found.Parent = game:GetService("ServerStorage") -- keep the spare copy out of the map
+	end
+	local meshes = {}
+	for _, d in ipairs(found:GetDescendants()) do
+		if d:IsA("MeshPart") then
+			meshes[d.Name] = d
+		end
+	end
+	local meta = BodyMeshes[META_KEYS[role]]
+	local lt, head, lh, rh = meshes.LowerTorso, meshes.Head, meshes.LeftHand, meshes.RightHand
+	if not (lt and head and lh and rh) then
+		warn("[Lockdown] " .. name .. " is missing body parts; using the built-in look")
+		return nil
+	end
+	-- Work out how the importer placed the file (scale and rotation), from the head, hips and hands
+	local upRef = meta.Head.center - meta.LowerTorso.center
+	local sideRef = meta.LeftHand.center - meta.RightHand.center
+	local upImp = head.Position - lt.Position
+	local sideImp = lh.Position - rh.Position
+	local scale = upImp.Magnitude / upRef.Magnitude
+	local function basis(up, side)
+		local u = up.Unit
+		local x = (side - u * side:Dot(u)).Unit
+		return CFrame.fromMatrix(Vector3.zero, x, u)
+	end
+	local rotation = basis(upImp, sideImp) * basis(upRef, sideRef):Inverse() -- reference -> imported
+	cached = { model = found, meshes = meshes, meta = meta, scale = scale, unrotate = rotation:Inverse() }
+	bodyCache[role] = cached
+	return cached
+end
+
+local HULK_PANTS = { LowerTorso = true, LeftUpperLeg = true, RightUpperLeg = true, LeftLowerLeg = true, RightLowerLeg = true }
+
+local function layerLook(role, costume, partName, layer)
+	local bone = if costume.glow then costume.spikes else Color3.fromRGB(215, 205, 180):Lerp(costume.spikes or Color3.new(1, 1, 1), 0.25)
+	if layer == "Eyes" then
+		return (if role == "hulk" then Color3.fromRGB(200, 255, 160) else costume.eyes), Enum.Material.Neon
+	elseif layer == "Mouth" then
+		return Color3.fromRGB(30, 8, 8), Enum.Material.SmoothPlastic
+	elseif layer == "Teeth" then
+		return Color3.fromRGB(230, 222, 200), Enum.Material.SmoothPlastic
+	elseif layer == "Hair" then
+		return Color3.fromRGB(20, 20, 18), Enum.Material.SmoothPlastic
+	elseif layer == "Bone" then
+		return bone, if costume.glow then Enum.Material.Neon else Enum.Material.SmoothPlastic
+	elseif role == "hulk" and HULK_PANTS[partName] then
+		return costume.pants, Enum.Material.SmoothPlastic
+	end
+	return costume.skin, Enum.Material.SmoothPlastic
+end
+
+-- Returns true if the sculpted body was applied
+local function applyBody(model, role, costume)
+	local body = findBody(role)
+	if not body then
+		return false
+	end
+	local ref = BodyMeshes.ref
+	local rot = body.unrotate
+	for meshName, source in pairs(body.meshes) do
+		local partName, layer = string.match(meshName, "^(%w+)_?(%w*)$")
+		local part = partName and model:FindFirstChild(partName)
+		local m = body.meta[meshName]
+		local r = ref[partName or ""]
+		if part and part:IsA("BasePart") and m and r then
+			local ratio = part.Size / r.size
+			local mesh = source:Clone()
+			for _, child in ipairs(mesh:GetChildren()) do
+				if not child:IsA("SurfaceAppearance") then
+					child:Destroy()
+				end
+			end
+			mesh.Name = "Body_" .. meshName
+			mesh.Anchored = false
+			mesh.CanCollide = false
+			mesh.CanQuery = false
+			mesh.CanTouch = false
+			mesh.Massless = true
+			mesh.CastShadow = true
+			mesh.Color, mesh.Material = layerLook(role, costume, partName, layer)
+			-- orientation that undoes the importer's rotation; size along the mesh's own axes
+			local orient = rot * source.CFrame.Rotation
+			local target = m.size * ratio
+			local function along(axis)
+				local v = orient:VectorToWorldSpace(axis)
+				return math.abs(v.X) * target.X + math.abs(v.Y) * target.Y + math.abs(v.Z) * target.Z
+			end
+			mesh.Size = Vector3.new(along(Vector3.xAxis), along(Vector3.yAxis), along(Vector3.zAxis))
+			mesh.CFrame = part.CFrame * CFrame.new((m.center - r.center) * ratio) * orient
+			local weld = Instance.new("WeldConstraint")
+			weld.Part0 = part
+			weld.Part1 = mesh
+			weld.Parent = mesh
+			mesh.Parent = model
+			if layer == "Eyes" then
+				local glow = Instance.new("PointLight")
+				glow.Color = mesh.Color
+				glow.Range = 12
+				glow.Brightness = 1.4
+				glow.Parent = mesh
+			end
+		end
+	end
+	for name in pairs(ref) do
+		local part = model:FindFirstChild(name)
+		if part and part:IsA("BasePart") then
+			part.Transparency = 1
+		end
+	end
+	return true
+end
+
 local function decorate(model, role, costume)
 	local head = model:FindFirstChild("Head")
 	local torso = model:FindFirstChild("UpperTorso")
@@ -429,7 +567,14 @@ local function decorate(model, role, costume)
 	if face then
 		face:Destroy()
 	end
-	if role == "hulk" then
+	if applyBody(model, role, costume) then
+		breath(head, Color3.fromRGB(225, 230, 225))
+		if role == "hulk" and costume.armor then -- Gladiator costume
+			for _, side in ipairs({ -1, 1 }) do
+				weldTo(model, torso, { Name = "Pauldron", Shape = Enum.PartType.Ball, Size = Vector3.new(torso.Size.X * 0.55, torso.Size.Y * 0.4, torso.Size.Z * 1.4), CFrame = torso.CFrame * CFrame.new(side * torso.Size.X * 0.68, torso.Size.Y * 0.62, 0), Color = costume.armor, Material = Enum.Material.Metal })
+			end
+		end
+	elseif role == "hulk" then
 		decorateHulk(model, costume)
 	else
 		decorateAbomination(model, costume)
