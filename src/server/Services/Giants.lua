@@ -75,12 +75,13 @@ local function describe(role, costume)
 	return desc
 end
 
--- Muscle/bone shapes welded onto the rig before it's scaled up. `scale` multiplies the
+-- Muscle/bone shapes welded onto the rig before it's scaled up. They're stretched ellipsoids
+-- (a block with a sphere mesh, added by finishLook after scaling), not round balls: Roblox balls
+-- are always perfect spheres, which is what made the bodies look like lumpy blobs. `scale` multiplies the
 -- body part's size; `offset` is relative to the part's center (in units of its size).
 local function mass(model, p, scale, offset, props)
 	local spec = {
 		Name = "Muscle",
-		Shape = Enum.PartType.Ball,
 		Size = p.Size * scale,
 		CFrame = p.CFrame * CFrame.new(p.Size * (offset or Vector3.zero)),
 		Color = p.Color,
@@ -89,7 +90,9 @@ local function mass(model, p, scale, offset, props)
 	for k, v in pairs(props or {}) do
 		spec[k] = v
 	end
-	return weldTo(model, p, spec)
+	local m = weldTo(model, p, spec)
+	m:SetAttribute("Ellipsoid", true)
+	return m
 end
 
 -- A spike/claw/fang: a wedge whose point aims along `direction` (in the part's space)
@@ -470,6 +473,38 @@ local function register(model, role, player)
 	return actor
 end
 
+-- After scaling: round off the muscles into ellipsoids, then make the silhouette readable in the
+-- dark with a faint rim outline and a dim light that shows the body's shapes
+local function finishLook(model, role, costume)
+	for _, p in ipairs(model:GetDescendants()) do
+		if p:IsA("BasePart") and p:GetAttribute("Ellipsoid") then
+			local mesh = Instance.new("SpecialMesh")
+			mesh.MeshType = Enum.MeshType.Sphere
+			mesh.Parent = p
+		end
+	end
+	local rim = Instance.new("Highlight")
+	rim.Name = "Rim"
+	rim.DepthMode = Enum.HighlightDepthMode.Occluded -- never seen through walls
+	rim.FillTransparency = 1
+	rim.OutlineColor = (costume.eyes or costume.skin):Lerp(Color3.new(1, 1, 1), 0.3)
+	rim.OutlineTransparency = 0.55
+	rim.Parent = model
+	local torso = model:FindFirstChild("UpperTorso")
+	if torso then
+		local a = Instance.new("Attachment")
+		a.Name = "BodyLight"
+		a.Position = Vector3.new(0, torso.Size.Y * 0.3, -torso.Size.Z * 2.5)
+		a.Parent = torso
+		local light = Instance.new("PointLight")
+		light.Color = Color3.fromRGB(255, 235, 215)
+		light.Range = 11
+		light.Brightness = 0.9
+		light.Shadows = false
+		light.Parent = a
+	end
+end
+
 -- Turn a player's character into a giant
 function Giants.transformPlayer(player, role, costume)
 	local character = player.Character
@@ -485,6 +520,7 @@ function Giants.transformPlayer(player, role, costume)
 	pcall(humanoid.ApplyDescription, humanoid, describe(role, costume))
 	decorate(character, role, costume)
 	character:ScaleTo(Config.GiantScale)
+	finishLook(character, role, costume)
 	return register(character, role, player)
 end
 
@@ -498,6 +534,7 @@ function Giants.spawnBot(role, costume, position)
 	model.Name = Config.Names[role] .. " (AI)"
 	decorate(model, role, costume)
 	model:ScaleTo(Config.GiantScale)
+	finishLook(model, role, costume)
 	model:PivotTo(CFrame.new(position + Vector3.new(0, 8, 0)))
 	model.Parent = Workspace
 	model.HumanoidRootPart:SetNetworkOwner(nil)

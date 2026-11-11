@@ -136,12 +136,12 @@ Config.CostumeOrder = {
 	civilian = { "civ_office", "civ_scientist", "civ_guard", "civ_janitor", "civ_hoodie" },
 }
 Config.Costumes = {
-	hulk_classic = { role = "hulk", name = "Classic Green", price = 0, skin = Color3.fromRGB(88, 122, 52), pants = Color3.fromRGB(52, 44, 70) },
+	hulk_classic = { role = "hulk", name = "Classic Green", price = 0, skin = Color3.fromRGB(76, 138, 46), pants = Color3.fromRGB(58, 46, 84) },
 	hulk_gray = { role = "hulk", name = "Gray Brute", price = 200, skin = Color3.fromRGB(130, 135, 140), pants = Color3.fromRGB(30, 30, 35) },
 	hulk_red = { role = "hulk", name = "Red Rage", price = 400, skin = Color3.fromRGB(180, 35, 30), pants = Color3.fromRGB(40, 40, 45) },
 	hulk_gladiator = { role = "hulk", name = "Gladiator", price = 700, skin = Color3.fromRGB(80, 150, 45), pants = Color3.fromRGB(120, 40, 30), armor = Color3.fromRGB(200, 170, 80) },
 
-	abom_classic = { role = "abomination", name = "Classic Horror", price = 0, skin = Color3.fromRGB(140, 78, 58), spikes = Color3.fromRGB(150, 140, 125), eyes = Color3.fromRGB(255, 170, 70) },
+	abom_classic = { role = "abomination", name = "Classic Horror", price = 0, skin = Color3.fromRGB(112, 122, 108), spikes = Color3.fromRGB(170, 160, 140), eyes = Color3.fromRGB(255, 160, 50) },
 	abom_crimson = { role = "abomination", name = "Crimson Horror", price = 250, skin = Color3.fromRGB(110, 30, 30), spikes = Color3.fromRGB(25, 15, 15), eyes = Color3.fromRGB(255, 60, 40) },
 	abom_bone = { role = "abomination", name = "Bone White", price = 450, skin = Color3.fromRGB(215, 210, 195), spikes = Color3.fromRGB(80, 75, 70), eyes = Color3.fromRGB(120, 200, 255) },
 	abom_toxic = { role = "abomination", name = "Toxic", price = 800, skin = Color3.fromRGB(40, 70, 45), spikes = Color3.fromRGB(80, 255, 90), eyes = Color3.fromRGB(80, 255, 90), glow = true },
