@@ -28,6 +28,9 @@ Config.Bots = {
 ---------------------------------------------------------------------------
 Config.GiantScale = 2 -- characters are scaled up this much (about 10 studs tall: twice a civilian, too tall for doors)
 
+-- How thick the sculpted giant bodies are (1 = as sculpted). Lower = leaner, higher = bulkier.
+Config.BodyBulk = 0.82
+
 -- Giants plow through walls, doors and furniture just by running into them
 Config.Rampage = {
 	reach = 5, -- how far ahead of the giant's center it checks

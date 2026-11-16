@@ -28,6 +28,9 @@ Config.Bots = {
 ---------------------------------------------------------------------------
 Config.GiantScale = 2 -- characters are scaled up this much (about 10 studs tall: twice a civilian, too tall for doors)
 
+-- How thick the sculpted giant bodies are (1 = as sculpted). Lower = leaner, higher = bulkier.
+Config.BodyBulk = 0.82
+
 -- Giants plow through walls, doors and furniture just by running into them
 Config.Rampage = {
 	reach = 5, -- how far ahead of the giant's center it checks
@@ -2040,8 +2043,8 @@ local function describe(role, costume)
 	desc.LeftLegColor = legs
 	desc.RightLegColor = legs
 	if role == "hulk" then
-		desc.WidthScale = 1.1
-		desc.DepthScale = 1.05
+		desc.WidthScale = 1
+		desc.DepthScale = 1
 	else
 		desc.HeightScale = 1.12 -- the Abomination towers over the Hulk but is leaner and wirier
 		desc.WidthScale = 0.95
@@ -2672,7 +2675,9 @@ local function applyBody(model, role, costume)
 			mesh.Color, mesh.Material = layerLook(role, costume, partName, layer)
 			-- orientation that undoes the importer's rotation; size along the mesh's own axes
 			local orient = rot * source.CFrame.Rotation
-			local target = m.size * scale
+			-- Config.BodyBulk slims arms, legs and torso without changing where they sit
+			local bulk = Config.BodyBulk or 1
+			local target = m.size * scale * Vector3.new(bulk, 1, bulk)
 			local function along(axis)
 				local v = orient:VectorToWorldSpace(axis)
 				return math.abs(v.X) * target.X + math.abs(v.Y) * target.Y + math.abs(v.Z) * target.Z
@@ -2752,7 +2757,8 @@ local ANIM = {
 	run = "rbxassetid://507767714",
 	jump = "rbxassetid://507765000",
 	fall = "rbxassetid://507767968",
-	punch = "rbxassetid://522635514",
+	punch = "rbxassetid://522635514", -- overhead smash
+	punch2 = "rbxassetid://522638767", -- lunging strike
 }
 
 local function loadTracks(humanoid, names)
@@ -2767,8 +2773,9 @@ local function loadTracks(humanoid, names)
 		anim.AnimationId = ANIM[name]
 		local ok, track = pcall(animator.LoadAnimation, animator, anim)
 		if ok and track then
-			track.Priority = if name == "punch" then Enum.AnimationPriority.Action else Enum.AnimationPriority.Core
-			track.Looped = name ~= "punch" and name ~= "jump"
+			local attack = string.sub(name, 1, 5) == "punch"
+			track.Priority = if attack then Enum.AnimationPriority.Action else Enum.AnimationPriority.Core
+			track.Looped = not attack and name ~= "jump"
 			tracks[name] = track
 		end
 	end
@@ -2780,7 +2787,8 @@ local function animateBot(actor, now)
 	if not tracks then
 		return
 	end
-	local speed = flat(actor.root.AssemblyLinearVelocity).Magnitude
+	local velocity = actor.root.AssemblyLinearVelocity
+	local speed = Vector3.new(velocity.X, 0, velocity.Z).Magnitude
 	local state = actor.humanoid:GetState()
 	local want = "idle"
 	if state == Enum.HumanoidStateType.Freefall or state == Enum.HumanoidStateType.Jumping then
@@ -2828,16 +2836,18 @@ local function register(model, role, player)
 	model:SetAttribute("HP", actor.hp)
 	model:SetAttribute("MaxHP", actor.maxHp)
 	Giants.actors[model] = actor
-	if player then
+	-- Roblox's own Animate script gives the best walk/run/jump. It runs for players, and for bots
+	-- only when it's a client-run Script; otherwise the server plays the bot's movement animations.
+	local animate = model:FindFirstChild("Animate")
+	local animateRuns = player ~= nil
+		or (animate and animate:IsA("Script") and animate.RunContext == Enum.RunContext.Client)
+	if animateRuns then
 		actor.tracks = nil
-		actor.punch = loadTracks(humanoid, { "punch" }).punch
+		local t = loadTracks(humanoid, { "punch", "punch2" })
+		actor.punches = { t.punch, t.punch2 }
 	else
-		local animate = model:FindFirstChild("Animate")
-		if animate then
-			animate:Destroy() -- a LocalScript can't run on a server-owned bot anyway
-		end
-		actor.tracks = loadTracks(humanoid, { "idle", "walk", "run", "jump", "fall", "punch" })
-		actor.punch = actor.tracks.punch
+		actor.tracks = loadTracks(humanoid, { "idle", "walk", "run", "jump", "fall", "punch", "punch2" })
+		actor.punches = { actor.tracks.punch, actor.tracks.punch2 }
 	end
 	Giants.byRole[role] = actor
 	humanoid.MaxHealth = 1e6
@@ -3018,8 +3028,10 @@ function Giants.smash(actor)
 	end
 	local look = flat(actor.root.CFrame.LookVector)
 	local point = actor.root.Position + look * cfg.smashRange * 0.55
-	if actor.punch then
-		actor.punch:Play(0.05, 1, 1.6)
+	actor.punchIndex = ((actor.punchIndex or 0) % 2) + 1
+	local punch = actor.punches and actor.punches[actor.punchIndex]
+	if punch then
+		punch:Play(0.05, 1, 1.5)
 	end
 	Net.all("Smash", actor.role, point)
 
