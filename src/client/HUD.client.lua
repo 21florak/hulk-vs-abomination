@@ -178,7 +178,7 @@ local function renderShop()
 	end
 	shopTitle.Text = "🎭 Costume Shop  ·  🪙 " .. (profile and profile.coins or 0)
 	local order = 0
-	for _, role in ipairs({ "hulk", "abomination", "civilian" }) do
+	for _, role in ipairs(if Config.PlayableHulk then { "hulk", "abomination", "civilian" } else { "abomination", "civilian" }) do
 		order += 1
 		label({ Size = UDim2.new(1, 0, 0, 26), Text = string.upper(Config.Names[role]), Font = Enum.Font.GothamBlack, TextSize = 16, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = if role == "hulk" then GREEN elseif role == "abomination" then RED else TEXT, LayoutOrder = order, ZIndex = 12, Parent = shopList })
 		for _, id in ipairs(Config.CostumeOrder[role]) do
@@ -313,7 +313,7 @@ ToClient.OnClientEvent:Connect(function(kind, a, b, c, d)
 		end
 		chaosFill.Size = UDim2.fromScale(math.clamp(s.chaos / 100, 0, 1), 1)
 		chaosBack.Visible = s.phase ~= "lobby"
-		bars.hulk.frame.Visible = s.phase == "hide" or s.phase == "hunt"
+		bars.hulk.frame.Visible = (s.phase == "hide" or s.phase == "hunt") and (Config.PlayableHulk or Config.Bots.hulk)
 		bars.abomination.frame.Visible = s.phase == "hide" or s.phase == "hunt"
 	elseif kind == "GiantHP" then
 		local bar = bars[a]
@@ -350,7 +350,7 @@ ToClient.OnClientEvent:Connect(function(kind, a, b, c, d)
 		batteryFill.Size = UDim2.fromScale(math.clamp(a / Config.Civilian.flashlightBattery, 0, 1), 1)
 	elseif kind == "Results" then
 		local hulkWon = a == "hulk"
-		resultsTitle.Text = if hulkWon then "🟢 " .. string.upper(Config.Names.hulk) .. " & SURVIVORS WIN" else "🔴 THE " .. string.upper(Config.Names.abomination) .. " WINS"
+		resultsTitle.Text = if hulkWon then (if Config.Bots.hulk or Config.PlayableHulk then "🟢 " .. string.upper(Config.Names.hulk) .. " & SURVIVORS WIN" else "🟢 THE SURVIVORS WIN") else "🔴 THE " .. string.upper(Config.Names.abomination) .. " WINS"
 		resultsTitle.TextColor3 = if hulkWon then GREEN else RED
 		resultsText.Text = b
 		rewardText.Text = ""

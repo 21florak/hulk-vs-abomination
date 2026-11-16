@@ -351,10 +351,10 @@ local function startRound()
 	local info = Facility.build(math.random(1, 1e6))
 	round.info = info
 
-	-- Roles: a random player is the Abomination (2+ players), another the Hulk (3+);
-	-- bots fill in, and everyone else is a civilian
+	-- Roles: one random player is the Abomination (2+ players), everyone else is a civilian.
+	-- The Hulk is played by the AI (unless Config.PlayableHulk is turned on).
 	local abomPlayer = if #players >= 2 then players[1] else nil
-	local hulkPlayer = if #players >= 3 then players[2] else nil
+	local hulkPlayer = if Config.PlayableHulk and #players >= 3 then players[2] else nil
 	for _, player in ipairs(players) do
 		if player == abomPlayer then
 			setRole(player, "abomination")

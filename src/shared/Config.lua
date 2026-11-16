@@ -17,10 +17,13 @@ Config.Round = {
 	results = 10,
 }
 
+-- Players can only be civilians or the Abomination. The Hulk is never a player.
+Config.PlayableHulk = false
+
 -- When there aren't enough players, AI bots play the giants
 Config.Bots = {
 	abomination = true, -- a bot Abomination if fewer than 2 players
-	hulk = true, -- a bot Hulk if fewer than 3 players
+	hulk = true, -- an AI Hulk protects the civilians every round (false = no Hulk at all)
 }
 
 ---------------------------------------------------------------------------

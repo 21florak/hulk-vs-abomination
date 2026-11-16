@@ -1,8 +1,8 @@
 # Hulk vs Abomination: Lockdown
 
 A scary hide-and-seek game for Roblox. A random player becomes the **Abomination** and hunts
-everyone through a pitch-black research facility. Another random player is the **Hulk**, who
-has to keep it away. Everyone else is a **civilian** with a weak flashlight and nowhere to go
+everyone through a pitch-black research facility. The **Hulk** is always computer-controlled
+and tries to keep it away; no player can be the Hulk. Everyone else is a **civilian** with a weak flashlight and nowhere to go
 but a locker. The more the giants fight, the more the building comes apart, and the fewer
 places there are to hide.
 
@@ -22,7 +22,7 @@ The map is built by scripts, so the editor shows an empty world until you press 
 | Phase | Time | What happens |
 |---|---|---|
 | Lobby | 20 s | Buy and equip costumes at the shop booth. |
-| Role draw | instant | Random roles: Abomination (2+ players), Hulk (3+ players), everyone else civilian. AI bots fill in missing giants. |
+| Role draw | instant | One random player is the Abomination (2+ players); everyone else is a civilian. The Hulk is always AI, and an AI Abomination hunts if you're playing alone. |
 | Hide | 25 s | Civilians scatter and hide. The Abomination is locked in a glass containment cell. |
 | Hunt | 4 min | The glass shatters. The Abomination wins if it catches every civilian. If anyone is still free when time runs out, the Hulk and the survivors win. |
 
@@ -40,8 +40,7 @@ civilian nearby, even hidden ones, as heartbeats), R leap, and hold E on a hidin
 Footstep ripples show you where people are sprinting. If the Hulk knocks you out, you're down for
 18 seconds, then you get back up.
 
-**Hulk**: Click/F smash (launches the Abomination through walls), Q thunderclap (stuns it),
-R leap. Every fight shakes the building, and hiding spots near the brawl crack and eventually
+**Hulk** (AI only): smashes the Abomination through walls, thunderclaps to stun it, and leaps. Every fight shakes the building, and hiding spots near the brawl crack and eventually
 break, so fight it *away* from the civilians. The Hulk can die. If that happens, nobody is
 coming.
 
@@ -67,12 +66,11 @@ close, whispers, and role-specific vision (the Abomination sees in yellow "preda
 | Result | Coins |
 |---|---|
 | Abomination wins | 120, plus 15 per catch |
-| Hulk wins | 100, plus 40 per knockout |
-| Surviving civilian (Hulk side wins) | 60 |
+| Surviving civilian | 60 |
 | Caught | 10 |
 | Everyone | +5 for playing |
 
-Costumes: Hulk (Classic, Gray Brute, Red Rage, Gladiator), Abomination (Classic, Crimson, Bone
+Costumes: Abomination (Classic, Crimson, Bone
 White, Toxic glow), Civilian (Office Worker, Scientist, Security Guard, Janitor, Black Hoodie).
 
 ## Sculpted giant bodies (one-time setup)
