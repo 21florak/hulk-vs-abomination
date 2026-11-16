@@ -572,29 +572,43 @@ local function layerLook(role, costume, partName, layer)
 end
 
 -- The rig's rest pose, measured from its joints (so animation doesn't matter): part -> CFrame
+-- relative to the LowerTorso. Handles both classic Motor6D joints and Roblox's newer
+-- AnimationConstraint joints; any part it can't reach is measured where it stands right now.
 local function restLayout(model)
 	local lower = model:FindFirstChild("LowerTorso")
-	if not lower then
+	if not lower or not lower:IsA("BasePart") then
 		return nil
 	end
 	local rest = { [lower] = CFrame.identity }
-	local motors = {}
+	local links = {} -- { part0, part1, offset } with part1 = part0 * offset at rest
 	for _, d in ipairs(model:GetDescendants()) do
 		if d:IsA("Motor6D") and d.Part0 and d.Part1 then
-			table.insert(motors, d)
+			table.insert(links, { d.Part0, d.Part1, d.C0 * d.C1:Inverse() })
+		elseif d:IsA("AnimationConstraint") and d.Attachment0 and d.Attachment1 then
+			local a0, a1 = d.Attachment0, d.Attachment1
+			if a0.Parent and a0.Parent:IsA("BasePart") and a1.Parent and a1.Parent:IsA("BasePart") then
+				table.insert(links, { a0.Parent, a1.Parent, a0.CFrame * a1.CFrame:Inverse() })
+			end
 		end
 	end
 	local progress = true
 	while progress do
 		progress = false
-		for _, m in ipairs(motors) do
-			if rest[m.Part0] and not rest[m.Part1] then
-				rest[m.Part1] = rest[m.Part0] * m.C0 * m.C1:Inverse()
+		for _, link in ipairs(links) do
+			local p0, p1, offset = link[1], link[2], link[3]
+			if rest[p0] and not rest[p1] then
+				rest[p1] = rest[p0] * offset
 				progress = true
-			elseif rest[m.Part1] and not rest[m.Part0] then
-				rest[m.Part0] = rest[m.Part1] * m.C1 * m.C0:Inverse()
+			elseif rest[p1] and not rest[p0] then
+				rest[p0] = rest[p1] * offset:Inverse()
 				progress = true
 			end
+		end
+	end
+	for name in pairs(BodyMeshes.ref) do
+		local part = model:FindFirstChild(name)
+		if part and part:IsA("BasePart") and not rest[part] then
+			rest[part] = lower.CFrame:ToObjectSpace(part.CFrame)
 		end
 	end
 	return rest
