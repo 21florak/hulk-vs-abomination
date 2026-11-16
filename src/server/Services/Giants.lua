@@ -427,6 +427,38 @@ end
 local BODY_NAMES = { hulk = "HulkBody", abomination = "AbominationBody" }
 local META_KEYS = { hulk = "Hulk", abomination = "Abomination" }
 local bodyCache = {}
+local reported = {}
+
+-- Explain body problems in Output, and on screen while testing in Studio (once per message)
+local function report(text, good)
+	if reported[text] then
+		return
+	end
+	reported[text] = true
+	if good then
+		print("[Lockdown] " .. text)
+	else
+		warn("[Lockdown] " .. text)
+	end
+	if game:GetService("RunService"):IsStudio() then
+		Net.all("StudioNote", text, good)
+		task.delay(3, function() -- again for players whose screen wasn't ready yet
+			Net.all("StudioNote", text, good)
+		end)
+	end
+end
+
+local function describeChildren(inst)
+	local bits = {}
+	for i, c in ipairs(inst:GetChildren()) do
+		if i > 4 then
+			table.insert(bits, "…")
+			break
+		end
+		table.insert(bits, c.Name .. " (" .. c.ClassName .. ")")
+	end
+	return if #bits == 0 then "nothing" else table.concat(bits, ", ")
+end
 
 local function findBody(role)
 	local cached = bodyCache[role]
@@ -434,14 +466,27 @@ local function findBody(role)
 		return cached
 	end
 	local name = BODY_NAMES[role]
+	-- Find the import, even if Studio named it a little differently ("HulkBody.obj", "hulkbody"...)
 	local found
+	local want = string.lower(name)
 	for _, container in ipairs({ game:GetService("ServerStorage"), ReplicatedStorage, Workspace }) do
-		found = container:FindFirstChild(name, true)
+		for _, d in ipairs(container:GetDescendants()) do
+			if string.find(string.lower(d.Name), want, 1, true) and not (found and found:IsA("Model")) then
+				if not found or d:IsA("Model") then
+					found = d
+				end
+			end
+		end
 		if found then
 			break
 		end
 	end
 	if not found then
+		report(name .. " not found. Import models/" .. name .. ".obj and put it in ServerStorage.")
+		return nil
+	end
+	if found:IsA("BasePart") then
+		report(name .. " was imported as one single piece (" .. found.ClassName .. "). Re-import it without merging the meshes.")
 		return nil
 	end
 	if found:IsDescendantOf(Workspace) then
@@ -466,19 +511,27 @@ local function findBody(role)
 			end
 		end
 	end
-	print(string.format("[Lockdown] %s: found %d mesh pieces, matched %d of %d body pieces", name, total, count, #(function()
-		local list = {}
-		for k in pairs(meta) do
-			table.insert(list, k)
-		end
-		return list
-	end)()))
-	if total <= 1 then
-		warn("[Lockdown] " .. name .. " was imported as a single merged mesh. Re-import it with the meshes kept separate (untick any 'merge meshes' option).")
+	local expected = 0
+	for _ in pairs(meta) do
+		expected += 1
+	end
+	print(string.format("[Lockdown] %s (%s): found %d MeshParts, matched %d of %d body pieces", name, found.ClassName, total, count, expected))
+	if total == 0 then
+		report(name .. " has no MeshParts inside. It contains: " .. describeChildren(found))
+		return nil
+	elseif total == 1 then
+		report(name .. " was imported as one merged mesh. Re-import it with the meshes kept separate.")
+		return nil
 	end
 	local lt, head, lh, rh = meshes.LowerTorso, meshes.Head, meshes.LeftHand, meshes.RightHand
 	if not (lt and head and lh and rh) then
-		warn("[Lockdown] " .. name .. " is missing body parts; using the built-in look")
+		local sample = {}
+		for _, d in ipairs(found:GetDescendants()) do
+			if d:IsA("MeshPart") and #sample < 4 then
+				table.insert(sample, d.Name)
+			end
+		end
+		report(name .. ": couldn't recognise the pieces (named " .. table.concat(sample, ", ") .. ")")
 		return nil
 	end
 	-- Work out how the importer placed the file (scale and rotation), from the head, hips and hands
@@ -556,6 +609,7 @@ local function applyBody(model, role, costume)
 	local ref = BodyMeshes.ref
 	local rest = restLayout(model)
 	if not rest then
+		report("Couldn't read the " .. role .. "'s skeleton (no LowerTorso)")
 		return false
 	end
 	-- Fit the reference layout to this rig: a separate scale and shift per axis (least squares over
@@ -569,6 +623,7 @@ local function applyBody(model, role, costume)
 		end
 	end
 	if #refs < 10 then
+		report("The " .. role .. "'s skeleton only has " .. #refs .. " of 15 R15 body parts")
 		return false
 	end
 	local function fitAxis(get)
@@ -653,7 +708,7 @@ local function applyBody(model, role, costume)
 		end
 	end
 	if applied < 10 then
-		warn("[Lockdown] Only " .. applied .. " body pieces fit; using the built-in look")
+		report("Only " .. applied .. " " .. role .. " body pieces fit the character; using the built-in look")
 		for _, d in ipairs(model:GetChildren()) do
 			if d:IsA("MeshPart") and string.sub(d.Name, 1, 5) == "Body_" then
 				d:Destroy()
@@ -667,7 +722,7 @@ local function applyBody(model, role, costume)
 			part.Transparency = 1
 		end
 	end
-	print(string.format("[Lockdown] Sculpted %s body applied (%d pieces, scale %.2f x %.2f)", role, applied, ax, ay))
+	report(string.format("Sculpted %s body applied (%d pieces)", role, applied), true)
 	return true
 end
 

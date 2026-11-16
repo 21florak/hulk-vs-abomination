@@ -95,6 +95,7 @@ end
 ---------------------------------------------------------------------------
 local announce = label({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 120), Size = UDim2.new(0.8, 0, 0, 40), Font = Enum.Font.GothamBlack, TextSize = 26, TextStrokeTransparency = 0.3, Text = "", Parent = gui })
 local announceToken = 0
+local studioNotes -- setup diagnostics (Studio only)
 local function showAnnouncement(text, style)
 	announceToken += 1
 	local token = announceToken
@@ -327,6 +328,14 @@ ToClient.OnClientEvent:Connect(function(kind, a, b, c, d)
 		showAnnouncement("⚠️ " .. b, "warn")
 	elseif kind == "Announce" then
 		showAnnouncement(a, b)
+	elseif kind == "StudioNote" then
+		-- Setup notes shown only while testing in Studio; they stay on screen
+		if not studioNotes then
+			studioNotes = label({ AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 16, 1, -110), Size = UDim2.new(0.5, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextSize = 15, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Bottom, BackgroundTransparency = 0.35, BackgroundColor3 = Color3.new(0, 0, 0), RichText = false, Text = "SETUP (Studio only):", Parent = gui })
+		end
+		if not string.find(studioNotes.Text, a, 1, true) then
+			studioNotes.Text ..= "\n" .. (if b then "✅ " else "❌ ") .. a
+		end
 	elseif kind == "Toast" then
 		showToast(a)
 	elseif kind == "RoleReveal" then
