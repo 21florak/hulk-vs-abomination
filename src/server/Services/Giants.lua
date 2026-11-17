@@ -693,7 +693,7 @@ local function applyBody(model, role, costume)
 			mesh.CanQuery = false
 			mesh.CanTouch = false
 			mesh.Massless = true
-			mesh.CastShadow = true
+			mesh.CastShadow = false -- arms shadowing the chest drew dark stripes across the body
 			mesh.Transparency = 0
 			mesh.Color, mesh.Material = layerLook(role, costume, partName, layer)
 			-- orientation that undoes the importer's rotation; size along the mesh's own axes
@@ -893,23 +893,29 @@ local function finishLook(model, role, costume)
 			mesh.Parent = p
 		end
 	end
-	local rim = Instance.new("Highlight")
-	rim.Name = "Rim"
-	rim.DepthMode = Enum.HighlightDepthMode.Occluded -- never seen through walls
-	rim.FillTransparency = 1
-	rim.OutlineColor = (costume.eyes or costume.skin):Lerp(Color3.new(1, 1, 1), 0.3)
-	rim.OutlineTransparency = 0.55
-	rim.Parent = model
+	local sculpted = model:FindFirstChild("Body_UpperTorso") ~= nil
+	if not sculpted then
+		-- the built-in look needs an outline to read in the dark; the sculpted body doesn't
+		local rim = Instance.new("Highlight")
+		rim.Name = "Rim"
+		rim.DepthMode = Enum.HighlightDepthMode.Occluded -- never seen through walls
+		rim.FillTransparency = 1
+		rim.OutlineColor = (costume.eyes or costume.skin):Lerp(Color3.new(1, 1, 1), 0.3)
+		rim.OutlineTransparency = 0.55
+		rim.Parent = model
+	end
 	local torso = model:FindFirstChild("UpperTorso")
 	if torso then
+		-- A dim "key light" above and to one side, angled across the body, so the muscles get
+		-- light-and-shadow shading (like the preview) instead of being lit flat from the front
 		local a = Instance.new("Attachment")
 		a.Name = "BodyLight"
-		a.Position = Vector3.new(0, torso.Size.Y * 0.3, -torso.Size.Z * 2.5)
+		a.Position = Vector3.new(-torso.Size.X * 1.6, torso.Size.Y * 2.6, -torso.Size.Z * 3.5)
 		a.Parent = torso
 		local light = Instance.new("PointLight")
-		light.Color = Color3.fromRGB(255, 235, 215)
-		light.Range = 11
-		light.Brightness = 0.9
+		light.Color = Color3.fromRGB(255, 238, 220)
+		light.Range = torso.Size.Magnitude * 4.5
+		light.Brightness = 1.1
 		light.Shadows = false
 		light.Parent = a
 	end
@@ -951,6 +957,39 @@ function Giants.spawnBot(role, costume, position)
 	local actor = register(model, role, nil)
 	actor.bot = true
 	return actor
+end
+
+-- A posed giant on display in the lobby (no AI, no animation), so everyone can see what's
+-- hunting them under good light
+function Giants.makeStatue(role, costume, cframe, parent)
+	local ok, model = pcall(Players.CreateHumanoidModelFromDescription, Players, describe(role, costume), Enum.HumanoidRigType.R15)
+	if not ok or not model then
+		return nil
+	end
+	model.Name = Config.Names[role] .. " Statue"
+	local animate = model:FindFirstChild("Animate")
+	if animate then
+		animate:Destroy()
+	end
+	decorate(model, role, costume)
+	model:ScaleTo(Config.GiantScale)
+	finishLook(model, role, costume)
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("BasePart") then
+			d.Anchored = true
+		end
+	end
+	local humanoid = model:FindFirstChildOfClass("Humanoid")
+	if humanoid then
+		humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+	end
+	model.Parent = parent
+	-- stand it on the floor
+	model:PivotTo(cframe)
+	local box, size = model:GetBoundingBox()
+	local bottom = box.Position.Y - size.Y / 2
+	model:PivotTo(model:GetPivot() + Vector3.new(0, cframe.Position.Y - bottom, 0))
+	return model
 end
 
 function Giants.alive(actor)

@@ -33,6 +33,48 @@ Lighting.GlobalShadows = true
 
 Facility.buildLobby()
 
+-- Both giants on display in the lobby under spotlights
+task.defer(function()
+	local lobby = workspace:FindFirstChild("Lobby")
+	if not lobby then
+		return
+	end
+	for _, spec in ipairs({ { "abomination", Vector3.new(30, 0, -18) }, { "hulk", Vector3.new(-30, 0, -18) } }) do
+		local role, offset = spec[1], spec[2]
+		local base = Facility.LOBBY + offset
+		local plinth = Instance.new("Part")
+		plinth.Name = "StatuePlinth"
+		plinth.Anchored = true
+		plinth.Size = Vector3.new(12, 1, 12)
+		plinth.Position = base + Vector3.new(0, 0.5, 0)
+		plinth.Color = Color3.fromRGB(30, 30, 36)
+		plinth.Material = Enum.Material.Marble
+		plinth.Parent = lobby
+		-- face the middle of the lobby (where players spawn)
+		local look = CFrame.lookAt(base + Vector3.new(0, 1, 0), Facility.LOBBY + Vector3.new(0, 1, 10))
+		local statue = Giants.makeStatue(role, Config.Costumes[Config.CostumeOrder[role][1]], look, lobby)
+		if statue then
+			-- key light from above on one side, a dimmer fill from the other
+			for _, l in ipairs({ { Vector3.new(-8, 18, 12), 2.2 }, { Vector3.new(9, 10, 10), 0.8 } }) do
+				local lamp = Instance.new("Part")
+				lamp.Name = "StatueLight"
+				lamp.Anchored = true
+				lamp.CanCollide = false
+				lamp.Transparency = 1
+				lamp.Size = Vector3.one
+				lamp.CFrame = CFrame.lookAt(base + look:VectorToWorldSpace(l[1] * Vector3.new(1, 1, -1)), base + Vector3.new(0, 6, 0))
+				local spot = Instance.new("SpotLight")
+				spot.Face = Enum.NormalId.Front
+				spot.Angle = 50
+				spot.Range = 40
+				spot.Brightness = l[2]
+				spot.Parent = lamp
+				lamp.Parent = lobby
+			end
+		end
+	end
+end)
+
 ---------------------------------------------------------------------------
 -- Round state
 ---------------------------------------------------------------------------
