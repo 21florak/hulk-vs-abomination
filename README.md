@@ -24,12 +24,27 @@ The map is built by scripts, so the editor shows an empty world until you press 
 | Lobby | 20 s | Buy and equip costumes at the shop booth. |
 | Role draw | instant | One random player is the Abomination (2+ players); everyone else is a civilian. The Hulk is always AI, and an AI Abomination hunts if you're playing alone. |
 | Hide | 25 s | Civilians scatter and hide. The Abomination is locked in a glass containment cell. |
-| Hunt | 4 min | The glass shatters. The Abomination wins if it catches every civilian. If anyone is still free when time runs out, the Hulk and the survivors win. |
+| Hunt | 4 min | The glass shatters. The Abomination wins if it catches every civilian. The survivors win if anyone is still free when time runs out, or if someone kills it with the cannon. |
+
+Every round is on a different map: **the research facility**, **St. Mercy Hospital**
+(hide under beds and in morgue drawers), **the subway tunnels** (train tracks and abandoned
+train cars) or **downtown** (open streets, parked cars and taxis that explode when the giants
+smash them, burning wrecks, streetlights and buildings to break into). Maps never repeat twice
+in a row (`Config.Maps`).
 
 **Civilians**: hide in lockers, wardrobes, under desks, in bathroom stalls, crates, walk-in
 fridges, server racks or air vents (E). You peek out through the slats while hidden.
 Sprinting (Shift or Ctrl) makes noise the Abomination can hear, and your flashlight (F) helps you see but
 helps it see you too. If your hiding spot gets smashed, you're thrown out stunned, so run.
+
+**Fighting back**: glowing blue **keycards** are scattered through the rooms. Once the
+civilians have found 4 (`Config.Objectives`), the steel **vault** can be opened (its reader
+shows the count). The vault walls are unbreakable and its door is too low for a giant. Inside
+is the **Containment Cannon**: click to charge it (1.2 s, and everyone sees it glow) and fire.
+One hit kills the Abomination and the survivors win; a miss means 20 s of recharging. If the
+holder is caught, the cannon drops where they fell. Red **adrenaline** shots appear in the
+corridors, only two at a time (`Config.Adrenaline`): carry one and press **G** for 5 seconds of
+top speed. When you're caught, the camera snaps to the Abomination's face as it lunges at you.
 
 **Giants** stand about twice as tall as a civilian (`Config.GiantScale`), too big for doors, and
 move fast. They don't need doors: running into a wall, door, locker or desk plows straight
@@ -38,7 +53,9 @@ through it (`Config.Rampage`).
 **Abomination**: Click/F smash (breaks walls and grabs anyone in reach), Q roar (reveals every
 civilian nearby, even hidden ones, as heartbeats), R leap, and hold E on a hiding spot to search it.
 Footstep ripples show you where people are sprinting. If the Hulk knocks you out, you're down for
-18 seconds, then you get back up.
+18 seconds, then you get back up. The **rage meter** fills while you hunt, smash, catch people and
+take hits; when it's full press **Shift** for a 5-second super sprint that tears through anything
+(`Config.Rage`). The AI Abomination hunts whoever holds the cannon first.
 
 **Hulk** (AI only): smashes the Abomination through walls, thunderclaps to stun it, and leaps. Every fight shakes the building, and hiding spots near the brawl crack and eventually
 break, so fight it *away* from the civilians. The Hulk can die. If that happens, nobody is
@@ -70,8 +87,20 @@ close, whispers, and role-specific vision (the Abomination sees in yellow "preda
 | Caught | 10 |
 | Everyone | +5 for playing |
 
-Costumes: Abomination (Classic, Crimson, Bone
-White, Toxic glow), Civilian (Office Worker, Scientist, Security Guard, Janitor, Black Hoodie).
+The player who kills the Abomination with the cannon gets +150.
+
+Costumes: Abomination (Classic, Crimson, Bone White, Toxic glow, **Nightmare**), Civilian
+(Office Worker, Scientist, Security Guard, Janitor, Black Hoodie, **Hazmat Suit**, **Paramedic**).
+The bold ones can't be bought: they're daily login rewards.
+
+## Progression
+
+- **Levels**: XP for playing, surviving, catching, keycards and the cannon kill (`Config.XP`).
+  Every level up pays bonus coins. Level, wins and coins show in the player list.
+- **Daily login rewards**: a 7-day streak of coins plus exclusive costumes on days 3, 5 and 7
+  (`Config.DailyRewards`). Missing a day restarts the streak.
+- **Leaderboard**: an all-time "Most Wins" board on the lobby wall (needs a published game with
+  API access turned on, like saving does).
 
 ## Sculpted giant bodies (one-time setup)
 
@@ -109,6 +138,9 @@ The `sounds/` folder has eight original sound effects, synthesized from scratch 
 | `heartbeat.ogg` | Loops louder and faster as the Abomination gets close |
 | `ambience.ogg` | Looping drone, vents and groaning metal |
 | `alarm.ogg` | Structure failing |
+| `taunt.ogg` | The Abomination's snarl in the catch jump scare |
+| `cannon.ogg` | The cannon's charge-up whine and blast |
+| `pickup.ogg` | Picking up keycards and adrenaline |
 | `scream.ogg` | Jump-scare stinger when you're caught or your hiding spot is exposed |
 
 Roblox only plays audio that's uploaded to your account:

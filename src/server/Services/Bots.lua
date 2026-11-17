@@ -80,18 +80,24 @@ local function abominationThink(actor, civilians)
 		return
 	end
 	-- Chase anyone out in the open
-	local best, bestDistance
+	local best, bestDistance, bestPriority
 	for _, player in ipairs(civilians) do
 		local character = player.Character
 		local target = character and character:FindFirstChild("HumanoidRootPart")
 		if target and not Hiding.isHidden(player) then
 			local d = flatDistance(target.Position, root.Position)
-			if d < 150 and (not bestDistance or d < bestDistance) then
-				best, bestDistance = target, d
+			-- whoever has the cannon is the biggest threat: hunt them first, from further away
+			local priority = if player:GetAttribute("HasCannon") then d * 0.4 else d
+			if d < (if player:GetAttribute("HasCannon") then 260 else 150) and (not bestDistance or priority < bestPriority) then
+				best, bestDistance, bestPriority = target, d, priority
 			end
 		end
 	end
 	if best then
+		-- full rage: burst into a super sprint to close the gap
+		if (actor.rageMeter or 0) >= 100 and bestDistance > 25 then
+			Giants.frenzy(actor)
+		end
 		if bestDistance < Config.Abomination.smashRange then
 			face(actor, best.Position)
 			Giants.smash(actor)

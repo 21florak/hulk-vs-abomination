@@ -985,6 +985,7 @@ function Giants.damage(target, amount, attacker)
 	target.model:SetAttribute("HP", target.hp)
 	target.lastHitBy = attacker
 	target.lastHitAt = os.clock()
+	Giants.addRage(target, Config.Rage.perHitTaken)
 	local state = "ok"
 	if target.hp <= 0 then
 		if target.role == "hulk" then
@@ -1057,6 +1058,7 @@ function Giants.smash(actor)
 		punch:Play(0.05, 1, 1.5)
 	end
 	Net.all("Smash", actor.role, point)
+	Giants.addRage(actor, Config.Rage.perSmash)
 
 	local opponent = Giants.byRole[if actor.role == "hulk" then "abomination" else "hulk"]
 	local hitGiant = false
@@ -1144,9 +1146,18 @@ function Giants.update()
 			if actor.role == "abomination" and Giants.rage then
 				speed = Config.Abomination.rageSpeed
 			end
+			local frenzy = now < (actor.frenzyUntil or 0)
+			if frenzy then
+				speed = Config.Rage.sprintSpeed
+			end
 			if now < actor.stunUntil or now < actor.koUntil or actor.frozen then
 				speed = 0
 			end
+			-- Rage meter: fills slowly while hunting (smashing and getting hit fill it faster)
+			if actor.role == "abomination" and Giants.hunting and not frenzy and not actor.frozen then
+				Giants.addRage(actor, Config.Rage.perSecond * (now - (actor.lastRageTick or now)))
+			end
+			actor.lastRageTick = now
 			actor.humanoid.WalkSpeed = speed
 			if actor.bot then
 				animateBot(actor, now)
@@ -1156,17 +1167,67 @@ function Giants.update()
 				Destruction.blast(actor.root.Position, 8, { fight = true })
 			elseif speed > 0 and now >= (actor.nextRam or 0) then
 				-- Rampage: running into a wall, door or anything breakable plows straight through it
-				local velocity = flat(actor.root.AssemblyLinearVelocity)
+				local v = actor.root.AssemblyLinearVelocity
+				local velocity = Vector3.new(v.X, 0, v.Z)
 				if velocity.Magnitude > 8 then
 					actor.nextRam = now + 0.15
+					local radius = if frenzy then Config.Rampage.radius * 1.5 else Config.Rampage.radius
 					local ahead = actor.root.Position + velocity.Unit * Config.Rampage.reach
-					if Destruction.anyBreakable(ahead, Config.Rampage.radius) then
-						Destruction.blast(ahead, Config.Rampage.radius, { fight = false })
+					if Destruction.anyBreakable(ahead, radius) then
+						Destruction.blast(ahead, radius, { fight = false })
 					end
 				end
 			end
 		end
 	end
+end
+
+---------------------------------------------------------------------------
+-- Rage: the Abomination's meter. Full rage unlocks a short super sprint (Shift / bots use it
+-- when chasing someone).
+---------------------------------------------------------------------------
+Giants.hunting = false
+
+function Giants.addRage(actor, amount)
+	if not actor or actor.role ~= "abomination" or actor.dead then
+		return
+	end
+	local before = actor.rageMeter or 0
+	actor.rageMeter = math.clamp(before + amount, 0, 100)
+	if math.floor(before) ~= math.floor(actor.rageMeter) and actor.player then
+		Net.send(actor.player, "Rage", actor.rageMeter)
+	end
+end
+
+function Giants.frenzy(actor)
+	if not Giants.active(actor) or actor.role ~= "abomination" or (actor.rageMeter or 0) < 100 then
+		return false
+	end
+	actor.rageMeter = 0
+	actor.frenzyUntil = os.clock() + Config.Rage.sprintSeconds
+	if actor.player then
+		Net.send(actor.player, "Rage", 0)
+	end
+	Net.all("Frenzy", actor.model, Config.Rage.sprintSeconds)
+	Net.all("Roar", actor.root.Position)
+	return true
+end
+
+-- One shot from the containment cannon: the Abomination is finished for good
+function Giants.kill(actor, killer)
+	if not Giants.alive(actor) then
+		return
+	end
+	actor.dead = true
+	actor.hp = 0
+	actor.model:SetAttribute("HP", 0)
+	actor.killedBy = killer
+	actor.humanoid.PlatformStand = true
+	actor.humanoid.WalkSpeed = 0
+	actor.root.AssemblyLinearVelocity = flat(actor.root.CFrame.LookVector) * -60 + Vector3.new(0, 45, 0)
+	Destruction.blast(actor.root.Position, 14, { fight = true })
+	Net.all("GiantHP", actor.role, 0, actor.maxHp, "dead")
+	Net.all("Killed", actor.root.Position)
 end
 
 function Giants.clear()

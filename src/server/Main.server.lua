@@ -13,6 +13,7 @@ local Destruction = require(Services.Destruction)
 local Hiding = require(Services.Hiding)
 local Giants = require(Services.Giants)
 local Bots = require(Services.Bots)
+local Objectives = require(Services.Objectives)
 
 Players.CharacterAutoLoads = false
 -- Shift is the sprint key, so turn off Roblox's Shift Lock (it fights over the same key)
@@ -42,6 +43,8 @@ local round = {
 	civilians = {}, -- players who started as civilians
 	caught = {}, -- player -> true
 	info = nil,
+	map = nil, -- last map played (so it doesn't repeat)
+	killer = nil, -- civilian who blasted the Abomination with the cannon
 }
 local battery = {} -- player -> flashlight battery
 local lastNoise = {} -- player -> time
@@ -93,11 +96,21 @@ local function catch(player, actor)
 		return
 	end
 	round.caught[player] = true
+	local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+	Objectives.dropCannon(player, root and root.Position)
+	player:SetAttribute("Adrenaline", nil)
+	player:SetAttribute("BoostUntil", nil)
 	if actor then
 		actor.catches = (actor.catches or 0) + 1
+		Giants.addRage(actor, Config.Rage.perCatch)
+		if actor.player then
+			Data.addXP(actor.player, Config.XP.perCatch)
+		end
 	end
 	Hiding.leave(player)
 	Net.send(player, "Caught")
+	-- Jump scare: the caught player's camera snaps to the Abomination's face
+	Net.send(player, "JumpScare", actor and actor.model)
 	Net.all("Announce", "😱 " .. player.DisplayName .. " was caught!", "bad")
 	task.delay(2.5, function()
 		if player.Parent and round.caught[player] then
@@ -225,15 +238,19 @@ local function onPlayerAdded(player)
 	local profile = Data.load(player)
 	local stats = Instance.new("Folder")
 	stats.Name = "leaderstats"
-	local coins = Instance.new("IntValue")
-	coins.Name = "Coins"
-	coins.Value = profile.coins
-	coins.Parent = stats
+	for _, name in ipairs({ "Level", "Wins", "Coins" }) do
+		local v = Instance.new("IntValue")
+		v.Name = name
+		v.Parent = stats
+	end
 	stats.Parent = player
+	Data.updateStats(player)
 	player:SetAttribute("Role", "lobby")
 	player.CharacterAdded:Connect(function(character)
 		local humanoid = character:WaitForChild("Humanoid")
 		humanoid.Died:Connect(function()
+			local root = character:FindFirstChild("HumanoidRootPart")
+			Objectives.dropCannon(player, root and root.Position)
 			task.wait(3)
 			if not player.Parent then
 				return
@@ -250,7 +267,15 @@ local function onPlayerAdded(player)
 		end)
 	end)
 	player:LoadCharacter()
+	local daily = Data.claimDaily(player)
 	Net.send(player, "Profile", profile)
+	if daily then
+		task.delay(3, function()
+			Net.send(player, "Daily", daily)
+			Net.send(player, "Profile", profile)
+		end)
+		task.spawn(Data.save, player)
+	end
 	if round.phase ~= "lobby" then
 		player:SetAttribute("Role", "spectator")
 	end
@@ -260,6 +285,8 @@ for _, p in ipairs(Players:GetPlayers()) do
 	task.spawn(onPlayerAdded, p)
 end
 Players.PlayerRemoving:Connect(function(player)
+	local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+	Objectives.dropCannon(player, root and root.Position)
 	Hiding.forget(player)
 	round.roles[player] = nil
 	battery[player] = nil
@@ -281,6 +308,8 @@ Net.Input.OnServerEvent:Connect(function(player, kind, value)
 			Giants.clap(actor)
 		elseif kind == "leap" then
 			Giants.leap(actor)
+		elseif kind == "frenzy" then
+			Giants.frenzy(actor)
 		end
 		return
 	end
@@ -294,11 +323,18 @@ Net.Input.OnServerEvent:Connect(function(player, kind, value)
 			end
 		elseif kind == "leave" then
 			Hiding.leave(player)
+		elseif kind == "fire" and round.phase == "hunt" then
+			Objectives.fire(player, value)
+		elseif kind == "adrenaline" and round.phase ~= "lobby" then
+			Objectives.useAdrenaline(player)
 		end
 	end
 end)
 
 ProximityPromptService.PromptTriggered:Connect(function(prompt, player)
+	if round.phase ~= "lobby" and Objectives.onPrompt(prompt, player) then
+		return
+	end
 	local spot = prompt.Parent and prompt.Parent:FindFirstAncestorOfClass("Model")
 	if prompt.Name == "HidePrompt" and spot and round.phase ~= "lobby" then
 		Hiding.hide(player, spot)
@@ -348,8 +384,19 @@ local function startRound()
 	Hiding.reset()
 	Bots.reset()
 	Giants.clear()
-	local info = Facility.build(math.random(1, 1e6))
+	-- Pick this round's map (never the same twice in a row)
+	local choices = {}
+	for _, name in ipairs(Config.Maps) do
+		if name ~= round.map or #Config.Maps == 1 then
+			table.insert(choices, name)
+		end
+	end
+	round.map = choices[math.random(1, #choices)]
+	round.killer = nil
+	local info = Facility.build(math.random(1, 1e6), round.map)
 	round.info = info
+	Objectives.setup(info)
+	Net.all("Map", info.map)
 
 	-- Roles: one random player is the Abomination (2+ players), everyone else is a civilian.
 	-- The Hulk is played by the AI (unless Config.PlayableHulk is turned on).
@@ -448,11 +495,23 @@ local function payOut(winner)
 			else
 				amount += R.caught
 			end
+			if player == round.killer then
+				amount += R.cannonKill
+			end
+			-- XP
+			local xp = Config.XP.played
+			if role == "abomination" and winner == "abomination" then
+				xp += Config.XP.abominationWin
+			elseif role == "civilian" and not round.caught[player] and winner == "hulk" then
+				xp += Config.XP.survived
+			end
+			Data.addXP(player, xp)
 			local won = (winner == "abomination" and role == "abomination") or (winner == "hulk" and (role == "hulk" or (role == "civilian" and not round.caught[player])))
 			if won and profile then
 				profile.wins += 1
 			end
 			Data.addCoins(player, amount)
+			Data.updateStats(player)
 			Net.send(player, "Reward", amount, won)
 			Net.send(player, "Profile", profile)
 			task.spawn(Data.save, player)
@@ -464,6 +523,7 @@ local function endRound(winner, text)
 	round.phase = "results"
 	round.endsAt = os.clock() + Config.Round.results
 	Destruction.stop()
+	Giants.hunting = false
 	Net.all("Results", winner, text)
 	payOut(winner)
 	sendState()
@@ -475,6 +535,7 @@ local function endRound(winner, text)
 	for _, player in ipairs(Players:GetPlayers()) do
 		player:SetAttribute("Role", "lobby")
 	end
+	Objectives.clear()
 	Giants.clear()
 	Hiding.reset()
 	Facility.clear()
@@ -541,6 +602,44 @@ task.spawn(function()
 	end
 end)
 
+-- Objectives and progression callbacks
+Objectives.onKeycard = function(player)
+	Data.addXP(player, Config.XP.keycard)
+end
+Objectives.onKill = function(player)
+	round.killer = player
+	Data.addXP(player, Config.XP.cannonKill)
+	Net.all("Announce", "💥 " .. player.DisplayName .. " KILLED THE " .. string.upper(Config.Names.abomination) .. "!", "good")
+end
+Data.onLevelUp = function(player, level)
+	Net.all("Toast", "⭐ " .. player.DisplayName .. " reached level " .. level .. "!", "good")
+	Net.send(player, "LevelUp", level)
+end
+
+-- Lobby leaderboard: all-time wins, refreshed every couple of minutes
+task.spawn(function()
+	while true do
+		local board = Data.winsBoard
+		if board and Facility.leaderboardRows then
+			local ok, pages = pcall(board.GetSortedAsync, board, false, 10)
+			if ok and pages then
+				local entries = pages:GetCurrentPage()
+				for k, row in ipairs(Facility.leaderboardRows) do
+					local entry = entries[k]
+					if entry then
+						local userId = tonumber(string.match(entry.key, "%d+"))
+						local okName, name = pcall(Players.GetNameFromUserIdAsync, Players, userId)
+						row.Text = string.format("%d. %s — %d", k, if okName then name else "?", entry.value)
+					else
+						row.Text = ""
+					end
+				end
+			end
+		end
+		task.wait(120)
+	end
+end)
+
 -- Main loop
 task.spawn(function()
 	while true do
@@ -560,7 +659,7 @@ task.spawn(function()
 		-- Hide
 		round.phase = "hide"
 		round.endsAt = os.clock() + Config.Round.hide
-		Facility.setStatus("LOCKDOWN IN PROGRESS")
+		Facility.setStatus("LOCKDOWN: " .. string.upper(round.info and round.info.map or "IN PROGRESS"))
 		Net.all("Announce", "🏃 HIDE! The " .. Config.Names.abomination .. " gets out in " .. Config.Round.hide .. " seconds.", "warn")
 		while os.clock() < round.endsAt do
 			tick()
@@ -572,6 +671,7 @@ task.spawn(function()
 		round.phase = "hunt"
 		round.endsAt = os.clock() + Config.Round.hunt
 		releaseAbomination()
+		Giants.hunting = true
 		local lastState = 0
 		local winner, text
 		while true do
@@ -584,6 +684,12 @@ task.spawn(function()
 			local abom = Giants.byRole.abomination
 			if #round.civilians > 0 and left == 0 then
 				winner, text = "abomination", "The " .. Config.Names.abomination .. " found everyone."
+				break
+			end
+			if abom and abom.dead then
+				local who = round.killer and round.killer.DisplayName or "Someone"
+				winner, text = "hulk", who .. " blasted the " .. Config.Names.abomination .. " with the " .. Config.Cannon.name .. "!"
+				task.wait(2) -- let everyone see it go down
 				break
 			end
 			if not (abom and abom.model.Parent) then

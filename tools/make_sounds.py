@@ -176,6 +176,54 @@ def thunder():
     return normalize(np.tanh((crack * 0.7 + rumble * 2.2) * 1.4) * envelope(n, 0.02, 1.5, d), 0.85)
 
 
+def taunt():
+    """The Abomination's snarl for the jump scare: three guttural, voice-like bursts and a roar.
+    (Original. To use a spoken line instead, record your own voice and upload that.)"""
+    d = 2.8
+    tt = t(d)
+    n = len(tt)
+    # syllable-like envelopes: GRR - AHH - RRRAAGH
+    env = np.zeros(n)
+    for start, length, peak in ((0.0, 0.32, 0.8), (0.42, 0.34, 0.9), (0.9, 1.7, 1.0)):
+        s0, s1 = int(start * RATE), int((start + length) * RATE)
+        seg = np.linspace(0, 1, s1 - s0)
+        env[s0:s1] = np.maximum(env[s0:s1], peak * np.sin(np.pi * seg) ** 0.6)
+    pitch = np.interp(tt, [0, 0.4, 0.9, 1.3, d], [70, 85, 65, 110, 50])
+    jitter = 1 + 0.08 * band(rng.standard_normal(n), 8, 40) / 0.05
+    voice = osc(pitch * jitter) + 0.8 * osc(pitch * 2.01 * jitter) + 0.6 * osc(pitch * 0.5)
+    # vowel-ish formants that move between the syllables
+    formant = band(voice, 200, 900) * np.interp(tt, [0, 0.42, 0.9, d], [1.2, 0.6, 1.4, 1]) + band(voice, 900, 2600) * np.interp(tt, [0, 0.42, 0.9, d], [0.3, 1.0, 0.8, 0.4])
+    rasp = band(rng.standard_normal(n), 300, 4000) * 0.8
+    flutter = 0.6 + 0.4 * np.sin(2 * np.pi * 32 * tt) ** 2
+    out = np.tanh((formant * flutter + rasp * 0.5) * 3) * env
+    sub = np.sin(2 * np.pi * 42 * tt) * env * 0.5
+    return normalize(out + sub)
+
+
+def pickup():
+    d = 0.5
+    tt = t(d)
+    freq = np.where(tt < 0.12, 660, 990)
+    tone = osc(freq, "sine") + 0.3 * osc(freq * 2, "sine")
+    return normalize(tone * np.exp(-tt * 7) * envelope(len(tt), 0.005, 0.2, d), 0.7)
+
+
+def cannon():
+    """1.2 s rising charge whine, then a huge blast."""
+    charge_len = 1.2
+    d = 3.0
+    tt = t(d)
+    n = len(tt)
+    rise = np.clip(tt / charge_len, 0, 1)
+    whine = osc(200 + 1400 * rise ** 2, "saw") * 0.25 + osc(100 + 700 * rise ** 2, "square") * 0.15
+    whine = band(whine, 150, 6000) * np.where(tt < charge_len, rise, 0)
+    after = np.clip(tt - charge_len, 0, None)
+    boom = osc(90 * np.exp(-after * 5) + 30, "sine") * np.exp(-after * 3) * 1.6 * (tt >= charge_len)
+    crack = band(rng.standard_normal(n), 800, 10000) * np.exp(-after * 18) * (tt >= charge_len) * 1.2
+    zap = osc(np.full(n, 1800.0) * np.exp(-after * 4), "saw") * np.exp(-after * 6) * 0.4 * (tt >= charge_len)
+    return normalize(np.tanh((whine + boom + crack + zap) * 1.5))
+
+
 SOUNDS = {
     "roar": roar,
     "smash": smash,
@@ -185,6 +233,9 @@ SOUNDS = {
     "alarm": alarm,
     "scream": scream,
     "thunder": thunder,
+    "taunt": taunt,
+    "pickup": pickup,
+    "cannon": cannon,
 }
 
 

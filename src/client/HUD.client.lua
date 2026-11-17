@@ -91,6 +91,49 @@ local function cooldownChip(key, text)
 end
 
 ---------------------------------------------------------------------------
+-- Objectives (keycards / vault / cannon), the Abomination's rage, adrenaline, daily rewards
+---------------------------------------------------------------------------
+local objectivePanel = new("Frame", { Visible = false, Position = UDim2.fromOffset(12, 112), Size = UDim2.fromOffset(240, 50), BackgroundColor3 = BG, BackgroundTransparency = 0.25, Parent = gui }, { corner(8) })
+local objectiveLine1 = label({ Position = UDim2.fromOffset(8, 4), Size = UDim2.new(1, -16, 0, 20), TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left, Text = "🔑 Keycards 0/4   🔒 Vault locked", Parent = objectivePanel })
+local objectiveLine2 = label({ Position = UDim2.fromOffset(8, 26), Size = UDim2.new(1, -16, 0, 18), TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = Color3.fromRGB(180, 180, 190), Text = "Find keycards to open the vault", Parent = objectivePanel })
+
+local rageBox = new("Frame", { Visible = false, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -62), Size = UDim2.fromOffset(420, 20), BackgroundColor3 = Color3.fromRGB(30, 30, 35), BackgroundTransparency = 0.2, Parent = gui }, { corner(6) })
+local rageFill = new("Frame", { Size = UDim2.fromScale(0, 1), BackgroundColor3 = Color3.fromRGB(200, 30, 20), Parent = rageBox }, { corner(6) })
+local rageText = label({ Size = UDim2.fromScale(1, 1), Text = "RAGE", TextSize = 12, Font = Enum.Font.GothamBlack, Parent = rageBox })
+
+local adrenalineChip = label({ Visible = false, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -70), Size = UDim2.fromOffset(300, 22), BackgroundColor3 = Color3.fromRGB(120, 20, 40), BackgroundTransparency = 0.2, TextSize = 13, Font = Enum.Font.GothamBlack, Text = "💉 ADRENALINE READY — press G", Parent = gui })
+new("UICorner", { CornerRadius = UDim.new(0, 6), Parent = adrenalineChip })
+local function updateAdrenaline()
+	local boosting = (player:GetAttribute("BoostUntil") or 0) > workspace:GetServerTimeNow()
+	adrenalineChip.Visible = player:GetAttribute("Role") == "civilian" and (player:GetAttribute("Adrenaline") == true or boosting)
+	adrenalineChip.Text = if boosting then "⚡ ADRENALINE RUSH!" else "💉 ADRENALINE READY — press G"
+end
+player:GetAttributeChangedSignal("Adrenaline"):Connect(updateAdrenaline)
+player:GetAttributeChangedSignal("BoostUntil"):Connect(function()
+	updateAdrenaline()
+	task.delay(Config.Adrenaline.duration + 0.1, updateAdrenaline)
+end)
+
+local function levelFor(xp)
+	local level, need = 1, Config.XP.levelBase
+	xp = xp or 0
+	while xp >= need do
+		xp -= need
+		level += 1
+		need += Config.XP.levelStep
+	end
+	return level, xp, need
+end
+
+local daily = new("Frame", { Visible = false, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.45), Size = UDim2.fromOffset(360, 200), BackgroundColor3 = Color3.fromRGB(25, 20, 35), ZIndex = 30, Parent = gui }, { corner(14), new("UIStroke", { Color = Color3.fromRGB(255, 210, 80), Thickness = 2 }) })
+local dailyTitle = label({ Position = UDim2.fromOffset(0, 14), Size = UDim2.new(1, 0, 0, 34), Font = Enum.Font.GothamBlack, TextSize = 26, TextColor3 = Color3.fromRGB(255, 210, 80), Text = "DAILY REWARD", ZIndex = 31, Parent = daily })
+local dailyText = label({ Position = UDim2.fromOffset(16, 56), Size = UDim2.new(1, -32, 0, 90), TextSize = 18, Text = "", ZIndex = 31, Parent = daily })
+local dailyClose = new("TextButton", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -14), Size = UDim2.fromOffset(140, 34), BackgroundColor3 = Color3.fromRGB(230, 180, 40), Text = "Awesome!", TextColor3 = Color3.new(1, 1, 1), Font = Enum.Font.GothamBlack, TextSize = 16, ZIndex = 31, Parent = daily }, { corner(8) })
+dailyClose.MouseButton1Click:Connect(function()
+	daily.Visible = false
+end)
+
+---------------------------------------------------------------------------
 -- Announcements, role reveal, toasts
 ---------------------------------------------------------------------------
 local announce = label({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 120), Size = UDim2.new(0.8, 0, 0, 40), Font = Enum.Font.GothamBlack, TextSize = 26, TextStrokeTransparency = 0.3, Text = "", Parent = gui })
@@ -125,9 +168,9 @@ local revealTitle = label({ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim
 local revealText = label({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.52), Size = UDim2.new(0.7, 0, 0, 120), TextSize = 20, ZIndex = 21, Parent = reveal })
 
 local ROLE_INFO = {
-	civilian = { title = "YOU ARE A CIVILIAN", color = Color3.fromRGB(240, 240, 240), text = "Hide. Stay quiet. Lockers, desks, stalls, crates, vents — anything. Sprinting makes noise and your flashlight gives you away. If your hiding spot gets smashed, RUN." },
+	civilian = { title = "YOU ARE A CIVILIAN", color = Color3.fromRGB(240, 240, 240), text = "Hide, or fight back: find " .. Config.Objectives.keycardsNeeded .. " glowing blue KEYCARDS to open the vault. Inside is a cannon that kills it in ONE shot — click to charge and fire. Grab red ADRENALINE shots (G) for a burst of speed. Sprinting makes noise." },
 	hulk = { title = "YOU ARE " .. string.upper(Config.Names.hulk), color = GREEN, text = "Keep the " .. Config.Names.abomination .. " away from the civilians. Click / F: SMASH · Q: THUNDERCLAP (stuns) · R: LEAP. Every hit sends it crashing through walls... and destroys hiding spots. You can die." },
-	abomination = { title = "YOU ARE THE " .. string.upper(Config.Names.abomination), color = RED, text = "Find every civilian. Click / F: SMASH (grabs anyone in reach) · Q: ROAR (reveals nearby civilians) · R: LEAP · hold E on a hiding spot to SEARCH. Listen for running footsteps." },
+	abomination = { title = "YOU ARE THE " .. string.upper(Config.Names.abomination), color = RED, text = "Find every civilian. Click / F: SMASH (grabs anyone in reach) · Q: ROAR (reveals nearby civilians) · R: LEAP · hold E on a hiding spot to SEARCH · SHIFT when your RAGE is full: SUPER SPRINT. Whoever grabs the cannon can kill you in one shot. Hunt them first." },
 }
 
 local function showRole(role)
@@ -176,7 +219,8 @@ local function renderShop()
 			c:Destroy()
 		end
 	end
-	shopTitle.Text = "🎭 Costume Shop  ·  🪙 " .. (profile and profile.coins or 0)
+	local level, into, need = levelFor(profile and profile.xp)
+	shopTitle.Text = string.format("🎭 Costume Shop  ·  🪙 %d  ·  ⭐ Lv %d (%d/%d XP)", profile and profile.coins or 0, level, into, need)
 	local order = 0
 	for _, role in ipairs(if Config.PlayableHulk then { "hulk", "abomination", "civilian" } else { "abomination", "civilian" }) do
 		order += 1
@@ -191,12 +235,12 @@ local function renderShop()
 			label({ Position = UDim2.fromOffset(44, 0), Size = UDim2.new(1, -190, 1, 0), Text = costume.name, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 13, Parent = row })
 			local button = new("TextButton", {
 				AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, 0), Size = UDim2.fromOffset(130, 30),
-				BackgroundColor3 = if equipped then Color3.fromRGB(60, 60, 70) elseif owned then Color3.fromRGB(70, 120, 200) else Color3.fromRGB(230, 180, 40),
-				Text = if equipped then "Equipped" elseif owned then "Equip" else "🪙 " .. costume.price,
+				BackgroundColor3 = if equipped then Color3.fromRGB(60, 60, 70) elseif owned then Color3.fromRGB(70, 120, 200) elseif costume.daily then Color3.fromRGB(90, 70, 130) else Color3.fromRGB(230, 180, 40),
+				Text = if equipped then "Equipped" elseif owned then "Equip" elseif costume.daily then "📅 Day " .. costume.daily .. " login" else "🪙 " .. costume.price,
 				TextColor3 = Color3.new(1, 1, 1), Font = Enum.Font.GothamBlack, TextSize = 14, ZIndex = 13, Parent = row,
 			}, { corner(8) })
 			button.MouseButton1Click:Connect(function()
-				if equipped then
+				if equipped or (costume.daily and not owned) then
 					return
 				end
 				local ok, message = ShopRF:InvokeServer(if owned then "equip" else "buy", id)
@@ -257,6 +301,8 @@ end)
 local function applyRole()
 	local role = player:GetAttribute("Role")
 	meters.Visible = role == "civilian"
+	rageBox.Visible = role == "abomination"
+	updateAdrenaline()
 	cooldownBox.Visible = role == "hulk" or role == "abomination"
 	for _, c in ipairs(cooldownBox:GetChildren()) do
 		if c:IsA("Frame") then
@@ -315,6 +361,7 @@ ToClient.OnClientEvent:Connect(function(kind, a, b, c, d)
 		chaosBack.Visible = s.phase ~= "lobby"
 		bars.hulk.frame.Visible = (s.phase == "hide" or s.phase == "hunt") and (Config.PlayableHulk or Config.Bots.hulk)
 		bars.abomination.frame.Visible = s.phase == "hide" or s.phase == "hunt"
+		objectivePanel.Visible = s.phase == "hide" or s.phase == "hunt"
 	elseif kind == "GiantHP" then
 		local bar = bars[a]
 		if bar then
@@ -338,6 +385,22 @@ ToClient.OnClientEvent:Connect(function(kind, a, b, c, d)
 		end
 	elseif kind == "Toast" then
 		showToast(a)
+	elseif kind == "Objectives" then
+		local open = a.vaultOpen
+		objectiveLine1.Text = string.format("🔑 Keycards %d/%d   %s", a.keycards, a.needed, if open then "🔓 Vault OPEN" elseif a.keycards >= a.needed then "🔓 Vault ready" else "🔒 Vault locked")
+		objectiveLine2.Text = if a.holder then "🔫 " .. a.holder .. " has the cannon" elseif open then "🔫 The cannon is up for grabs" elseif a.keycards >= a.needed then "Open the vault to get the cannon" else "Find keycards to open the vault"
+	elseif kind == "Rage" then
+		rageFill.Size = UDim2.fromScale(math.clamp(a / 100, 0, 1), 1)
+		rageText.Text = if a >= 100 then "🔥 RAGE FULL — press SHIFT for a SUPER SPRINT" else "RAGE " .. math.floor(a) .. "%"
+		rageFill.BackgroundColor3 = if a >= 100 then Color3.fromRGB(255, 80, 20) else Color3.fromRGB(200, 30, 20)
+	elseif kind == "Map" then
+		showAnnouncement("📍 " .. a, "warn")
+	elseif kind == "Daily" then
+		dailyTitle.Text = "DAILY REWARD — DAY " .. a.day
+		dailyText.Text = "+🪙 " .. a.coins .. (if a.costume then "\n🎁 Unlocked costume: " .. a.costume else "") .. "\n🔥 Login streak: " .. a.streak .. " day(s)\nCome back tomorrow for more!"
+		daily.Visible = true
+	elseif kind == "LevelUp" then
+		showAnnouncement("⭐ LEVEL UP! You're level " .. a .. " (+🪙 " .. Config.XP.coinsPerLevel * a .. ")", "good")
 	elseif kind == "RoleReveal" then
 		showRole(a)
 	elseif kind == "Cooldown" then

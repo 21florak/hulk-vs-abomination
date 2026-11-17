@@ -7,6 +7,7 @@ local Workspace = game:GetService("Workspace")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Net = require(script.Parent.Net)
+local Facility = require(script.Parent.Facility)
 
 local Destruction = {}
 Destruction.chaos = 0
@@ -65,6 +66,21 @@ function Destruction.shatterSpot(model, from)
 	end
 	local root = Workspace:FindFirstChild("Facility")
 	local debris = root and root:FindFirstChild("Debris")
+	if model:GetAttribute("Vehicle") and model.PrimaryPart then
+		-- cars and train cars go up in a fireball
+		local boom = Instance.new("Explosion")
+		boom.Position = model.PrimaryPart.Position
+		boom.BlastRadius = 10
+		boom.BlastPressure = 0
+		boom.DestroyJointRadiusPercent = 0
+		boom.ExplosionType = Enum.ExplosionType.NoCraters
+		boom.Parent = Workspace
+		Net.all("Smash", "vehicle", model.PrimaryPart.Position)
+		local fire = Instance.new("Fire")
+		fire.Size = 10
+		fire.Heat = 14
+		fire.Parent = model.PrimaryPart
+	end
 	for _, p in ipairs(model:GetDescendants()) do
 		if p:IsA("ProximityPrompt") then
 			p:Destroy()
@@ -199,7 +215,8 @@ function Destruction.collapseAt(point)
 		return
 	end
 	local debris = root:FindFirstChild("Debris")
-	local h = Config.Facility.height
+	local info = Facility.info
+	local h = if info then info.height else Config.Facility.height
 	Net.all("Collapse", point)
 	for k = 1, 4 do
 		local slab = Instance.new("Part")
@@ -226,7 +243,8 @@ local function randomInside()
 			return s.PrimaryPart.Position * Vector3.new(1, 0, 1)
 		end
 	end
-	local W, D = Config.Facility.cols * (Config.Facility.room + Config.Facility.hall), Config.Facility.rows * (Config.Facility.room + Config.Facility.hall)
+	local info = Facility.info
+	local W, D = info and info.width or 200, info and info.depth or 150
 	return Vector3.new(math.random(-W / 2 + 10, W / 2 - 10), 0, math.random(-D / 2 + 10, D / 2 - 10))
 end
 

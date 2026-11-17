@@ -1,6 +1,8 @@
 -- Input for every role:
 --   Giants:    Click / F = Smash   ·   Q = Roar (Abomination) / Thunderclap (Hulk)   ·   R = Leap
+--              Shift = rage super sprint (Abomination, when the rage meter is full)
 --   Civilians: Shift (or Ctrl) = Sprint (makes noise)   ·   F = Flashlight   ·   Space / E = leave a hiding spot
+--              G = adrenaline shot   ·   Click with the cannon equipped = charge and fire
 -- Phones get on-screen buttons. Prompts that don't fit your role are hidden.
 local ContextActionService = game:GetService("ContextActionService")
 local Players = game:GetService("Players")
@@ -121,6 +123,36 @@ toggleFlashlight = function()
 	Input:FireServer("flashlight", on)
 end
 
+local function useAdrenaline()
+	if role() == "civilian" and player:GetAttribute("Adrenaline") and not hidden then
+		Input:FireServer("adrenaline")
+	end
+end
+
+local function frenzy()
+	if role() == "abomination" then
+		Input:FireServer("frenzy")
+	end
+end
+
+-- The containment cannon: clicking with it equipped fires at whatever you're aiming at
+local mouse = player:GetMouse()
+local function watchTool(tool)
+	if tool:IsA("Tool") and tool.Name == Config.Cannon.name then
+		tool.Activated:Connect(function()
+			if not hidden then
+				Input:FireServer("fire", mouse.Hit.Position)
+			end
+		end)
+	end
+end
+player.CharacterAdded:Connect(function(character)
+	character.ChildAdded:Connect(watchTool)
+end)
+if player.Character then
+	player.Character.ChildAdded:Connect(watchTool)
+end
+
 ---------------------------------------------------------------------------
 -- Bindings (rebuilt whenever your role changes)
 ---------------------------------------------------------------------------
@@ -144,12 +176,13 @@ local function unbindAll()
 	ContextActionService:UnbindAction("Sprint")
 end
 
+local CIVILIAN_PROMPTS = { KeycardPrompt = true, VaultPrompt = true, CannonPrompt = true, AdrenalinePrompt = true }
 local function updatePrompts()
 	local r = role()
 	local facility = workspace:FindFirstChild("Facility")
 	for _, d in ipairs(facility and facility:GetDescendants() or {}) do
 		if d:IsA("ProximityPrompt") then
-			if d.Name == "HidePrompt" then
+			if d.Name == "HidePrompt" or CIVILIAN_PROMPTS[d.Name] then
 				d.Enabled = r == "civilian" and not hidden
 			elseif d.Name == "SearchPrompt" then
 				d.Enabled = r == "abomination"
@@ -165,7 +198,11 @@ local function applyRole()
 		bind("GiantSmash", smash, "Smash", Enum.KeyCode.F, Enum.KeyCode.ButtonR2)
 		bind("GiantSpecial", special, if r == "hulk" then "Clap" else "Roar", Enum.KeyCode.Q, Enum.KeyCode.ButtonX)
 		bind("GiantLeap", leap, "Leap", Enum.KeyCode.R, Enum.KeyCode.ButtonY)
+		if r == "abomination" then
+			bind("Frenzy", frenzy, "Rage", Enum.KeyCode.LeftShift, Enum.KeyCode.ButtonL3)
+		end
 	elseif r == "civilian" then
+		bind("Adrenaline", useAdrenaline, "Boost", Enum.KeyCode.G, Enum.KeyCode.ButtonB)
 		-- Keyboard F / Shift are read directly below; these give phones and gamepads buttons
 		bind("Flashlight", toggleFlashlight, "Light", Enum.KeyCode.ButtonY)
 		ContextActionService:BindAction("Sprint", function(_, state)
@@ -251,7 +288,12 @@ RunService.Heartbeat:Connect(function(dt)
 		return
 	end
 	local moving = humanoid.MoveDirection.Magnitude > 0.1
-	if sprinting and moving and stamina > 0 then
+	local boosted = (player:GetAttribute("BoostUntil") or 0) > workspace:GetServerTimeNow()
+	if boosted then
+		-- adrenaline: top speed, and your stamina refills instead of draining
+		humanoid.WalkSpeed = Config.Adrenaline.speed
+		stamina = math.min(Config.Civilian.stamina, stamina + Config.Civilian.staminaRegen * dt)
+	elseif sprinting and moving and stamina > 0 then
 		stamina = math.max(0, stamina - Config.Civilian.sprintDrain * dt)
 		humanoid.WalkSpeed = Config.Civilian.sprintSpeed
 	else
@@ -266,6 +308,8 @@ ProximityPromptService.PromptShown:Connect(function(prompt)
 	if prompt.Name == "HidePrompt" and (role() ~= "civilian" or hidden) then
 		prompt.Enabled = false
 	elseif prompt.Name == "SearchPrompt" and role() ~= "abomination" then
+		prompt.Enabled = false
+	elseif CIVILIAN_PROMPTS[prompt.Name] and (role() ~= "civilian" or hidden) then
 		prompt.Enabled = false
 	end
 end)

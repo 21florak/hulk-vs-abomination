@@ -72,6 +72,39 @@ Config.Hulk = {
 	leapCooldown = 3,
 }
 
+-- Fighting back: keycards open the armory vault, which holds a cannon that kills the
+-- Abomination in one hit. Adrenaline shots give civilians a short burst of speed.
+Config.Objectives = {
+	keycardsSpawned = 6, -- scattered through the rooms
+	keycardsNeeded = 4, -- to open the vault
+}
+Config.Cannon = {
+	name = "Containment Cannon",
+	chargeTime = 1.2, -- seconds of glowing wind-up before it fires (stand your ground!)
+	recharge = 20, -- after a shot
+	range = 260,
+	hitRadius = 6, -- how close the beam has to pass (scaled with the giant's size)
+}
+Config.Adrenaline = {
+	maxOnMap = 2, -- only a couple lying around at a time
+	respawn = 30, -- seconds before a taken shot is replaced somewhere else
+	duration = 5,
+	speed = 34, -- walk speed while boosted (sprint is 23)
+}
+
+-- Maps rotate every round (never the same one twice in a row)
+Config.Maps = { "facility", "hospital", "subway", "city" }
+
+-- The Abomination's rage meter (0-100). Full rage unlocks a super sprint (Shift).
+Config.Rage = {
+	perSecond = 1.4, -- while hunting
+	perSmash = 3,
+	perHitTaken = 6, -- when the Hulk hits it
+	perCatch = 20,
+	sprintSpeed = 52,
+	sprintSeconds = 5,
+}
+
 Config.Knockback = 140 -- how hard a giant gets launched by a hit (they crash through walls)
 
 Config.Civilian = {
@@ -133,13 +166,14 @@ Config.Rewards = {
 	survivor = 60,
 	caught = 10,
 	participation = 5,
+	cannonKill = 150, -- the civilian who blasts the Abomination
 }
 
 -- Costumes recolor the character. Owned costumes are saved; price 0 = free default.
 Config.CostumeOrder = {
 	hulk = { "hulk_classic", "hulk_gray", "hulk_red", "hulk_gladiator" },
-	abomination = { "abom_classic", "abom_crimson", "abom_bone", "abom_toxic" },
-	civilian = { "civ_office", "civ_scientist", "civ_guard", "civ_janitor", "civ_hoodie" },
+	abomination = { "abom_classic", "abom_crimson", "abom_bone", "abom_toxic", "abom_nightmare" },
+	civilian = { "civ_office", "civ_scientist", "civ_guard", "civ_janitor", "civ_hoodie", "civ_hazmat", "civ_paramedic" },
 }
 Config.Costumes = {
 	hulk_classic = { role = "hulk", name = "Classic Green", price = 0, skin = Color3.fromRGB(76, 138, 46), pants = Color3.fromRGB(58, 46, 84) },
@@ -157,6 +191,34 @@ Config.Costumes = {
 	civ_guard = { role = "civilian", name = "Security Guard", price = 150, shirt = Color3.fromRGB(30, 45, 80), pants = Color3.fromRGB(25, 30, 45) },
 	civ_janitor = { role = "civilian", name = "Janitor", price = 150, shirt = Color3.fromRGB(230, 120, 30), pants = Color3.fromRGB(60, 70, 60) },
 	civ_hoodie = { role = "civilian", name = "Black Hoodie", price = 250, shirt = Color3.fromRGB(25, 25, 28), pants = Color3.fromRGB(35, 35, 40) },
+
+	-- Daily login exclusives (can't be bought)
+	civ_hazmat = { role = "civilian", name = "Hazmat Suit", daily = 3, shirt = Color3.fromRGB(235, 200, 40), pants = Color3.fromRGB(225, 190, 35) },
+	civ_paramedic = { role = "civilian", name = "Paramedic", daily = 5, shirt = Color3.fromRGB(40, 90, 170), pants = Color3.fromRGB(30, 35, 50) },
+	abom_nightmare = { role = "abomination", name = "Nightmare", daily = 7, skin = Color3.fromRGB(45, 35, 60), spikes = Color3.fromRGB(190, 70, 255), eyes = Color3.fromRGB(210, 90, 255), glow = true },
+}
+
+-- Progression: XP and levels, daily login rewards, and the wins leaderboard in the lobby
+Config.XP = {
+	played = 20,
+	survived = 60,
+	abominationWin = 80,
+	perCatch = 25,
+	keycard = 15,
+	cannonKill = 200,
+	levelBase = 100, -- XP for level 1 -> 2; each level after needs levelStep more
+	levelStep = 50,
+	coinsPerLevel = 25, -- bonus coins on level up (times the new level)
+}
+-- Day 1..7 of a login streak (it loops after day 7). Missing a day restarts at day 1.
+Config.DailyRewards = {
+	{ coins = 50 },
+	{ coins = 75 },
+	{ coins = 50, costume = "civ_hazmat" },
+	{ coins = 100 },
+	{ coins = 100, costume = "civ_paramedic" },
+	{ coins = 150 },
+	{ coins = 200, costume = "abom_nightmare" },
 }
 
 -- Sounds: original effects made by tools/make_sounds.py live in the sounds/ folder.
@@ -171,6 +233,9 @@ Config.Sounds = {
 	alarm = "", -- sounds/alarm.ogg     (structure failing)
 	scream = "", -- sounds/scream.ogg    (jump-scare stinger when you're caught or exposed)
 	thunder = "", -- sounds/thunder.ogg   (after each lightning flash)
+	taunt = "", -- sounds/taunt.ogg     (the Abomination's snarl in the catch jump scare; or upload your own voice line)
+	pickup = "", -- sounds/pickup.ogg    (keycards, adrenaline)
+	cannon = "", -- sounds/cannon.ogg    (charge-up and blast)
 }
 
 return Config

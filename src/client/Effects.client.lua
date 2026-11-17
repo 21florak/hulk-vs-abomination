@@ -464,6 +464,78 @@ RunService:BindToRenderStep("Fear", Enum.RenderPriority.Camera.Value + 1, functi
 end)
 
 ---------------------------------------------------------------------------
+-- Jump scare: when you're caught, your camera snaps to the Abomination's face as it lunges
+---------------------------------------------------------------------------
+local function jumpScare(model)
+	play("taunt", 1)
+	local head = model and model.Parent and model:FindFirstChild("Head")
+	if not head then
+		return
+	end
+	local start = os.clock()
+	local oldFov = camera.FieldOfView
+	camera.CameraType = Enum.CameraType.Scriptable
+	RunService:BindToRenderStep("JumpScare", Enum.RenderPriority.Last.Value, function()
+		local t = os.clock() - start
+		if not head.Parent or t > 1.9 then
+			RunService:UnbindFromRenderStep("JumpScare")
+			camera.FieldOfView = oldFov
+			camera.CameraType = Enum.CameraType.Custom
+			return
+		end
+		local face = head.CFrame
+		local size = head.Size.Magnitude
+		-- it lunges in fast, then holds right in your face, shaking with rage
+		local lunge = math.clamp(t / 0.22, 0, 1)
+		local distance = size * (2.4 - 1.5 * lunge)
+		local jitter = Vector3.new(math.random() - 0.5, math.random() - 0.5, math.random() - 0.5) * 0.18 * size
+		local eye = face.Position + face.LookVector * distance - face.UpVector * size * 0.05 + jitter
+		camera.FieldOfView = 60 - 12 * lunge
+		camera.CFrame = CFrame.lookAt(eye, face.Position)
+	end)
+end
+
+-- Short-lived glowing beam between two points
+local function beam(from, to, color, width, seconds)
+	local length = (to - from).Magnitude
+	local p = Instance.new("Part")
+	p.Anchored = true
+	p.CanCollide = false
+	p.CanQuery = false
+	p.Material = Enum.Material.Neon
+	p.Color = color
+	p.Size = Vector3.new(width, width, length)
+	p.CFrame = CFrame.lookAt((from + to) / 2, to)
+	p.Parent = Workspace
+	local light = Instance.new("PointLight")
+	light.Color = color
+	light.Range = 40
+	light.Brightness = 4
+	light.Parent = p
+	TweenService:Create(p, TweenInfo.new(seconds), { Transparency = 1, Size = Vector3.new(width * 0.1, width * 0.1, length) }):Play()
+	TweenService:Create(light, TweenInfo.new(seconds), { Brightness = 0 }):Play()
+	task.delay(seconds + 0.1, function()
+		p:Destroy()
+	end)
+end
+
+-- A temporary glow attached to a part
+local function glowOn(part, color, range, brightness, seconds)
+	if not part then
+		return
+	end
+	local light = Instance.new("PointLight")
+	light.Color = color
+	light.Range = range
+	light.Brightness = 0
+	light.Parent = part
+	TweenService:Create(light, TweenInfo.new(seconds), { Brightness = brightness }):Play()
+	task.delay(seconds + 0.2, function()
+		light:Destroy()
+	end)
+end
+
+---------------------------------------------------------------------------
 -- Server events
 ---------------------------------------------------------------------------
 ToClient.OnClientEvent:Connect(function(kind, a, b, c)
@@ -520,6 +592,69 @@ ToClient.OnClientEvent:Connect(function(kind, a, b, c)
 		play("scream", 1)
 		screenFlash(Color3.fromRGB(150, 0, 0), 0.9, 2.5)
 		addShake(3)
+	elseif kind == "JumpScare" then
+		jumpScare(a)
+	elseif kind == "CannonCharge" then
+		local root = a and a:FindFirstChild("HumanoidRootPart")
+		if root then
+			glowOn(root, Color3.fromRGB(120, 255, 150), 26, 6, b or 1.2)
+			playAt("cannon", root.Position, 1.4, 1)
+		end
+	elseif kind == "CannonFire" then
+		beam(a, b, if c then Color3.fromRGB(200, 255, 210) else Color3.fromRGB(110, 255, 140), if c then 2.4 else 1.4, 0.6)
+		shakeFrom(a, 1, 90)
+		screenFlash(Color3.fromRGB(160, 255, 180), 0.25, 0.4)
+	elseif kind == "Killed" then
+		shakeFrom(a, 3, 400)
+		screenFlash(Color3.new(1, 1, 1), 0.7, 1.2)
+		playAt("roar", a, 2, 0.6)
+		playAt("smash", a, 2, 0.5)
+	elseif kind == "Frenzy" then
+		local root = a and a:FindFirstChild("HumanoidRootPart")
+		if root then
+			local fire = Instance.new("ParticleEmitter")
+			fire.Texture = "rbxasset://textures/particles/smoke_main.dds"
+			fire.Color = ColorSequence.new(Color3.fromRGB(255, 60, 20), Color3.fromRGB(60, 0, 0))
+			fire.Size = NumberSequence.new(3, 7)
+			fire.Transparency = NumberSequence.new(0.3, 1)
+			fire.Lifetime = NumberRange.new(0.5, 0.9)
+			fire.Rate = 60
+			fire.Speed = NumberRange.new(2, 5)
+			fire.LightEmission = 0.8
+			fire.Parent = root
+			glowOn(root, Color3.fromRGB(255, 50, 20), 30, 3, 0.3)
+			task.delay(b or 5, function()
+				fire.Enabled = false
+				task.wait(1)
+				fire:Destroy()
+			end)
+			if player.Character == a then
+				screenFlash(Color3.fromRGB(200, 0, 0), 0.4, 0.8)
+				TweenService:Create(camera, TweenInfo.new(0.3), { FieldOfView = 90 }):Play()
+				task.delay(b or 5, function()
+					TweenService:Create(camera, TweenInfo.new(0.6), { FieldOfView = 70 }):Play()
+				end)
+			else
+				shakeFrom(root.Position, 1.2, 160)
+			end
+		end
+	elseif kind == "Pickup" then
+		if a == "boost" and b then
+			playAt("pickup", b, 1, 0.7)
+			local mine = player.Character and (player.Character:GetPivot().Position - b).Magnitude < 3
+			if mine then
+				screenFlash(Color3.fromRGB(255, 60, 90), 0.3, 0.6)
+				TweenService:Create(camera, TweenInfo.new(0.25), { FieldOfView = 85 }):Play()
+				task.delay(Config.Adrenaline.duration, function()
+					TweenService:Create(camera, TweenInfo.new(0.6), { FieldOfView = 70 }):Play()
+				end)
+			end
+		elseif b then
+			playAt("pickup", b, 0.9, 1)
+		end
+	elseif kind == "VaultOpen" then
+		playAt("alarm", a, 1, 0.75)
+		shakeFrom(a, 0.6, 120)
 	elseif kind == "Reveal" then
 		for _, position in ipairs(a or {}) do
 			heartMarker(position, b or 2)
