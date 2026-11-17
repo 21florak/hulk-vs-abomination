@@ -675,6 +675,22 @@ local function applyBody(model, role, costume)
 	end
 
 	local rot = body.unrotate
+	-- One-time report (Output window) of how the import was read and fitted, for troubleshooting
+	if not body.reported then
+		body.reported = true
+		local function v(x)
+			return string.format("(%.2f, %.2f, %.2f)", x.X, x.Y, x.Z)
+		end
+		local lines = { "[Lockdown] BODY REPORT " .. role .. ": fit scale " .. v(scale) .. " shift " .. v(Vector3.new(bx, by, az and bz or 0)) .. " importRot " .. v(Vector3.new(rot:ToEulerAnglesXYZ()) * (180 / math.pi)) .. " importScale " .. string.format("%.3f", body.scale) }
+		for _, key in ipairs({ "Head", "UpperTorso", "LowerTorso", "LeftUpperArm", "LeftHand", "LeftUpperLeg", "LeftFoot" }) do
+			local src = body.meshes[key]
+			local part = model:FindFirstChild(key)
+			if src and part and rest[part] then
+				table.insert(lines, string.format("  %s [%s] imp pos %s size %s rot %s | ref center %s size %s | rig rest %s size %s", key, src.Name, v(src.Position), v(src.Size), v(Vector3.new(src.CFrame:ToEulerAnglesXYZ()) * (180 / math.pi)), v(body.meta[key].center), v(body.meta[key].size), v(rest[part].Position), v(part.Size)))
+			end
+		end
+		print(table.concat(lines, "\n"))
+	end
 	local applied = 0
 	for meshName, source in pairs(body.meshes) do
 		local partName, layer = string.match(meshName, "^(%w+)_?(%w*)$")
